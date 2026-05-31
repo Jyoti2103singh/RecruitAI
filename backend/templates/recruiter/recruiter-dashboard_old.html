@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recruiter Dashboard | AIScreen</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a2a3d;
+      --accent: #7c6af5;
+      --accent2: #f5a623;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --blue: #3b82f6;
+      --text: #e8e8f0;
+      --muted: #6b6b8a;
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font-display); min-height: 100vh; }
+
+    /* SIDEBAR */
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      width: 220px; height: 100vh;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 24px 0; z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px; font-size: 1.2rem; font-weight: 800;
+      letter-spacing: -0.5px; border-bottom: 1px solid var(--border); color: var(--accent);
+    }
+    .sidebar-logo span { color: var(--text); }
+    .sidebar-nav { flex: 1; padding: 16px 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; font-size: 0.85rem; font-weight: 600;
+      color: var(--muted); cursor: pointer; text-decoration: none;
+      transition: all 0.15s; border-left: 3px solid transparent;
+    }
+    .nav-item:hover { color: var(--text); background: var(--surface2); }
+    .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(124,106,245,0.08); }
+    .nav-badge {
+      margin-left: auto; background: var(--red); color: #fff;
+      font-size: 0.65rem; padding: 2px 6px; border-radius: 99px; font-weight: 700;
+    }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+    .user-badge { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-weight: 700; font-size: 0.85rem; color: #fff;
+    }
+    .logout-btn {
+      display: block; margin-top: 10px; padding: 8px; text-align: center;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 6px; font-size: 0.75rem;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
+    }
+    .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* MAIN */
+    .main { margin-left: 220px; padding: 32px; }
+
+    .page-header { margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .page-title { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
+    .page-title span { color: var(--accent); }
+    .header-actions { display: flex; gap: 10px; }
+
+    /* NOTIFICATION BELL */
+    .notif-btn {
+      position: relative; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 8px 14px; border-radius: 8px;
+      cursor: pointer; font-size: 1rem; transition: all 0.15s;
+    }
+    .notif-btn:hover { border-color: var(--accent); }
+    .notif-dot {
+      position: absolute; top: 4px; right: 4px;
+      width: 8px; height: 8px; background: var(--red);
+      border-radius: 50%; display: none;
+    }
+    .notif-dot.show { display: block; }
+
+    /* NOTIFICATION PANEL */
+    .notif-panel {
+      display: none; position: fixed; top: 70px; right: 32px;
+      width: 360px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; z-index: 500; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      max-height: 480px; overflow-y: auto;
+    }
+    .notif-panel.open { display: block; }
+    .notif-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .notif-header h3 { font-size: 0.95rem; font-weight: 700; }
+    .mark-all-btn { font-size: 0.75rem; color: var(--accent); cursor: pointer; background: none; border: none; }
+    .notif-item {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.15s;
+    }
+    .notif-item:hover { background: var(--surface2); }
+    .notif-item.unread { background: rgba(124,106,245,0.06); }
+    .notif-item-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 3px; }
+    .notif-item-body { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+    .notif-item-time { font-size: 0.7rem; color: var(--muted); margin-top: 4px; font-family: var(--font-mono); }
+    .notif-empty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 0.85rem; }
+
+    /* STAT CARDS */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .stat-card.purple::before { background: var(--accent); }
+    .stat-card.green::before { background: var(--green); }
+    .stat-card.yellow::before { background: var(--yellow); }
+    .stat-card.red::before { background: var(--red); }
+    .stat-card.blue::before { background: var(--blue); }
+    .stat-icon { font-size: 1.5rem; margin-bottom: 10px; }
+    .stat-number { font-size: 2rem; font-weight: 800; font-family: var(--font-mono); }
+    .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-change { font-size: 0.75rem; margin-top: 8px; }
+    .stat-change.up { color: var(--green); }
+    .stat-change.neutral { color: var(--muted); }
+
+    /* GRID LAYOUT */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+    /* CARDS */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 22px;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .card-title { font-size: 0.95rem; font-weight: 700; }
+    .card-link { font-size: 0.78rem; color: var(--accent); text-decoration: none; cursor: pointer; }
+    .card-link:hover { text-decoration: underline; }
+
+    /* TABLE */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 8px 12px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td { padding: 12px; font-size: 0.83rem; border-bottom: 1px solid rgba(42,42,61,0.5); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--surface2); }
+
+    /* BADGES */
+    .badge {
+      padding: 3px 10px; border-radius: 20px; font-size: 0.7rem;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-pending { background: rgba(245,158,11,0.15); color: var(--yellow); }
+    .badge-shortlisted { background: rgba(124,106,245,0.2); color: var(--accent); }
+    .badge-rejected { background: rgba(239,68,68,0.1); color: var(--red); }
+    .badge-hired { background: rgba(34,197,94,0.15); color: var(--green); }
+
+    /* SCORE BAR */
+    .score-bar-wrap { background: var(--surface2); border-radius: 99px; height: 6px; width: 80px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
+    .score-bar { height: 100%; border-radius: 99px; background: var(--accent); }
+
+    /* CHART */
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* TOP APPLICANTS */
+    .applicant-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid rgba(42,42,61,0.5);
+    }
+    .applicant-item:last-child { border-bottom: none; }
+    .applicant-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-weight: 700; font-size: 0.85rem; color: #fff;
+      flex-shrink: 0;
+    }
+    .applicant-name { font-size: 0.85rem; font-weight: 600; }
+    .applicant-job { font-size: 0.75rem; color: var(--muted); }
+    .applicant-score {
+      margin-left: auto; font-family: var(--font-mono);
+      font-size: 0.85rem; font-weight: 600;
+    }
+
+    /* QUICK ACTIONS */
+    .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .action-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 16px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 10px;
+      cursor: pointer; text-decoration: none; color: var(--text);
+      transition: all 0.15s; font-size: 0.8rem; font-weight: 600;
+      text-align: center;
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,106,245,0.08); }
+    .action-btn .icon { font-size: 1.4rem; }
+
+    /* JOB PERFORMANCE */
+    .job-perf-item {
+      padding: 12px 0; border-bottom: 1px solid rgba(42,42,61,0.5);
+    }
+    .job-perf-item:last-child { border-bottom: none; }
+    .job-perf-top { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .job-perf-title { font-size: 0.85rem; font-weight: 600; }
+    .job-perf-count { font-size: 0.78rem; color: var(--muted); font-family: var(--font-mono); }
+    .progress-bar-wrap { background: var(--surface2); border-radius: 99px; height: 5px; overflow: hidden; }
+    .progress-bar { height: 100%; border-radius: 99px; background: var(--accent); transition: width 1s ease; }
+
+    /* TOAST */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 12px 20px; border-radius: 10px;
+      font-size: 0.85rem; font-weight: 600; z-index: 999;
+      transform: translateY(80px); opacity: 0; transition: all 0.3s;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); color: var(--green); }
+
+    /* SPINNER */
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">AI<span>Screen</span></div>
+  <div class="sidebar-nav">
+    <a class="nav-item active" href="/dashboard">
+      <span>🏠</span> Dashboard
+    </a>
+    <a class="nav-item" href="/upload">
+      <span>📄</span> Screen Resume
+    </a>
+    <a class="nav-item" href="/candidates">
+      <span>👥</span> Candidates
+    </a>
+    <a class="nav-item" href="/recruiter/applications" id="nav-applications">
+      <span>📋</span> Applications
+      <span class="nav-badge" id="pendingBadge" style="display:none">0</span>
+    </a>
+    <a class="nav-item" href="/recruiter/post-job">
+      <span>💼</span> Post a Job
+    </a>
+    <a class="nav-item" href="/analytics">
+      <span>📊</span> Analytics
+    </a>
+    <a class="nav-item" href="/history">
+      <span>🕒</span> History
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-badge">
+      <div class="user-avatar" id="avatarInitial">R</div>
+      <div>
+        <div style="font-size:0.8rem;font-weight:600;">{{ username if username else 'Recruiter' }}</div>
+        <div style="font-size:0.7rem;color:var(--muted)">Recruiter</div>
+      </div>
+    </div>
+    <a href="/logout" class="logout-btn">↩ Logout</a>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Recruiter <span>Dashboard</span></div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-top:4px;" id="dateDisplay"></div>
+    </div>
+    <div class="header-actions">
+      <button class="notif-btn" onclick="toggleNotifications()" id="notifBtn">
+        🔔
+        <div class="notif-dot" id="notifDot"></div>
+      </button>
+      <a href="/recruiter/post-job" style="padding:9px 18px;background:var(--accent);color:#fff;border-radius:8px;font-size:0.82rem;font-weight:600;text-decoration:none;">
+        + Post Job
+      </a>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION PANEL -->
+  <div class="notif-panel" id="notifPanel">
+    <div class="notif-header">
+      <h3>🔔 Notifications</h3>
+      <button class="mark-all-btn" onclick="markAllRead()">Mark all read</button>
+    </div>
+    <div id="notifList">
+      <div class="notif-empty">No notifications yet</div>
+    </div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stats-grid">
+    <div class="stat-card purple">
+      <div class="stat-icon">👥</div>
+      <div class="stat-number" id="statTotal">{{ total }}</div>
+      <div class="stat-label">Total Candidates</div>
+      <div class="stat-change neutral">All time</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon">✅</div>
+      <div class="stat-number" id="statHired">{{ hired }}</div>
+      <div class="stat-label">Hired</div>
+      <div class="stat-change up" id="hireRate">—</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-number" id="statShortlisted">{{ shortlisted }}</div>
+      <div class="stat-label">Shortlisted</div>
+      <div class="stat-change neutral">Active pipeline</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-icon">❌</div>
+      <div class="stat-number" id="statRejected">{{ rejected }}</div>
+      <div class="stat-label">Rejected</div>
+      <div class="stat-change neutral">Reviewed</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-icon">📋</div>
+      <div class="stat-number" id="statApplications">0</div>
+      <div class="stat-label">New Applications</div>
+      <div class="stat-change up" id="pendingCount">Loading…</div>
+    </div>
+  </div>
+
+  <!-- ROW 1: Recent Applications + Top Applicants -->
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📋 Recent Applications</div>
+        <a class="card-link" href="/recruiter/applications">View all →</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Applicant</th>
+            <th>Job</th>
+            <th>Score</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="recentApplications">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🏆 Top Applicants</div>
+        <a class="card-link" href="/candidates">View all →</a>
+      </div>
+      <div id="topApplicants">
+        <div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:20px;">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Chart + Quick Actions + Job Performance -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📊 Application Trends</div>
+        <span style="font-size:0.75rem;color:var(--muted)">By status</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="statusChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚡ Quick Actions</div>
+      </div>
+      <div class="quick-actions">
+        <a class="action-btn" href="/upload">
+          <span class="icon">📄</span>
+          Screen Resume
+        </a>
+        <a class="action-btn" href="/recruiter/post-job">
+          <span class="icon">💼</span>
+          Post a Job
+        </a>
+        <a class="action-btn" href="/recruiter/applications">
+          <span class="icon">📋</span>
+          Applications
+        </a>
+        <a class="action-btn" href="/candidates">
+          <span class="icon">👥</span>
+          Candidates
+        </a>
+      </div>
+
+      <div style="margin-top:20px;">
+        <div class="card-header" style="margin-bottom:12px;">
+          <div class="card-title">💼 Job Performance</div>
+        </div>
+        <div id="jobPerformance">
+          <div style="color:var(--muted);font-size:0.82rem;">Loading…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 3: Recent Candidates (from existing data) -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🕒 Recently Screened Candidates</div>
+      <a class="card-link" href="/candidates">View all →</a>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>ATS Score</th>
+          <th>Status</th>
+          <th>Screened At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in recent %}
+        <tr>
+          <td style="font-weight:600;">{{ c.name }}</td>
+          <td style="color:var(--muted);">{{ c.email }}</td>
+          <td>
+            <span style="font-family:var(--font-mono);font-weight:700;color:{% if c.score >= 70 %}var(--green){% elif c.score >= 45 %}var(--yellow){% else %}var(--red){% endif %}">
+              {{ c.score }}
+            </span>
+            <div class="score-bar-wrap"><div class="score-bar" style="width:{{ c.score }}%"></div></div>
+          </td>
+          <td><span class="badge badge-{{ c.status or 'pending' }}">{{ c.status or 'pending' }}</span></td>
+          <td style="color:var(--muted);font-size:0.78rem;font-family:var(--font-mono);">{{ c.created_at[:10] if c.created_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No candidates screened yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ── DATE ──
+  document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('en-IN', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  // ── AVATAR ──
+  const username = "{{ username if username else 'R' }}";
+  document.getElementById('avatarInitial').textContent = username.charAt(0).toUpperCase();
+
+  // ── NOTIFICATIONS STORAGE ──
+  function getNotifications() {
+    try { return JSON.parse(localStorage.getItem('recruiter_notifs') || '[]'); } catch(e) { return []; }
+  }
+  function saveNotifications(notifs) {
+    localStorage.setItem('recruiter_notifs', JSON.stringify(notifs));
+  }
+  function addNotification(title, body, type = 'info') {
+    const notifs = getNotifications();
+    notifs.unshift({
+      id: Date.now(), title, body, type,
+      time: new Date().toISOString(), read: false
+    });
+    saveNotifications(notifs.slice(0, 50));
+    renderNotifications();
+  }
+
+  function renderNotifications() {
+    const notifs = getNotifications();
+    const unread = notifs.filter(n => !n.read).length;
+    const dot = document.getElementById('notifDot');
+    const badge = document.getElementById('pendingBadge');
+    dot.classList.toggle('show', unread > 0);
+
+    const list = document.getElementById('notifList');
+    if (!notifs.length) {
+      list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id})">
+        <div class="notif-item-title">${n.title}</div>
+        <div class="notif-item-body">${n.body}</div>
+        <div class="notif-item-time">${formatTime(n.time)}</div>
+      </div>
+    `).join('');
+  }
+
+  function markRead(id) {
+    const notifs = getNotifications().map(n => n.id === id ? {...n, read: true} : n);
+    saveNotifications(notifs);
+    renderNotifications();
+  }
+
+  function markAllRead() {
+    saveNotifications(getNotifications().map(n => ({...n, read: true})));
+    renderNotifications();
+  }
+
+  function toggleNotifications() {
+    const panel = document.getElementById('notifPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) markAllRead();
+  }
+
+  function formatTime(iso) {
+    try {
+      const d = new Date(iso);
+      const diff = Math.floor((Date.now() - d) / 1000);
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+      return d.toLocaleDateString('en-IN');
+    } catch(e) { return ''; }
+  }
+
+  // Close panel on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#notifPanel') && !e.target.closest('#notifBtn')) {
+      document.getElementById('notifPanel').classList.remove('open');
+    }
+  });
+
+  // ── LOAD DASHBOARD DATA ──
+  async function loadDashboardData() {
+    try {
+      // Load applications
+      const res = await fetch('/api/recruiter/applications');
+      const apps = await res.json();
+
+      const pending = apps.filter(a => a.status === 'pending');
+      const shortlisted = apps.filter(a => a.status === 'shortlisted');
+
+      document.getElementById('statApplications').textContent = apps.length;
+      document.getElementById('pendingCount').textContent = `${pending.length} pending review`;
+
+      // Pending badge in sidebar
+      if (pending.length > 0) {
+        const badge = document.getElementById('pendingBadge');
+        badge.textContent = pending.length;
+        badge.style.display = 'inline-block';
+      }
+
+      // Check for new applications since last visit
+      const lastVisit = localStorage.getItem('last_dashboard_visit');
+      const newApps = lastVisit
+        ? apps.filter(a => new Date(a.created_at) > new Date(lastVisit))
+        : [];
+      if (newApps.length > 0) {
+        newApps.forEach(a => {
+          addNotification(
+            '📨 New Application',
+            `${a.applicant} applied for ${a.job_title || 'a job'}`,
+            'new'
+          );
+        });
+      }
+      localStorage.setItem('last_dashboard_visit', new Date().toISOString());
+
+      // Recent applications table
+      const tbody = document.getElementById('recentApplications');
+      if (!apps.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No applications yet</td></tr>';
+      } else {
+        tbody.innerHTML = apps.slice(0, 6).map(a => `
+          <tr>
+            <td style="font-weight:600;">${esc(a.applicant)}</td>
+            <td style="color:var(--muted);font-size:0.78rem;">${esc(a.job_title || '—')}</td>
+            <td>
+              <span style="font-family:var(--font-mono);font-weight:700;color:${scoreColor(a.ats_score)}">
+                ${a.ats_score || 0}
+              </span>
+            </td>
+            <td><span class="badge badge-${a.status || 'pending'}">${a.status || 'pending'}</span></td>
+            <td>
+              <button onclick="quickAction(${a.id},'shortlisted')" style="background:rgba(124,106,245,0.2);border:none;color:var(--accent);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.72rem;margin-right:4px;">✓</button>
+              <button onclick="quickAction(${a.id},'rejected')" style="background:rgba(239,68,68,0.1);border:none;color:var(--red);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:0.72rem;">✗</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      // Top applicants by ATS score
+      const top = [...apps].sort((a,b) => (b.ats_score||0) - (a.ats_score||0)).slice(0,5);
+      const topEl = document.getElementById('topApplicants');
+      if (!top.length) {
+        topEl.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:20px;">No applicants yet</div>';
+      } else {
+        topEl.innerHTML = top.map(a => `
+          <div class="applicant-item">
+            <div class="applicant-avatar">${a.applicant.charAt(0).toUpperCase()}</div>
+            <div>
+              <div class="applicant-name">${esc(a.applicant)}</div>
+              <div class="applicant-job">${esc(a.job_title || '—')}</div>
+            </div>
+            <div class="applicant-score" style="color:${scoreColor(a.ats_score)}">${a.ats_score || 0}</div>
+          </div>
+        `).join('');
+      }
+
+      // Chart
+      renderChart(apps);
+
+      // Job performance
+      loadJobPerformance(apps);
+
+      // Hire rate
+      const total = parseInt(document.getElementById('statTotal').textContent) || 0;
+      const hired = parseInt(document.getElementById('statHired').textContent) || 0;
+      if (total > 0) {
+        document.getElementById('hireRate').textContent = Math.round(hired/total*100) + '% hire rate';
+      }
+
+    } catch(e) {
+      console.error('Dashboard load error:', e);
+    }
+  }
+
+  function loadJobPerformance(apps) {
+    const jobMap = {};
+    apps.forEach(a => {
+      const key = a.job_title || 'Unknown';
+      jobMap[key] = (jobMap[key] || 0) + 1;
+    });
+    const jobs = Object.entries(jobMap).sort((a,b) => b[1]-a[1]).slice(0,4);
+    const max = jobs[0]?.[1] || 1;
+    const el = document.getElementById('jobPerformance');
+    if (!jobs.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;">No data yet</div>';
+      return;
+    }
+    el.innerHTML = jobs.map(([title, count]) => `
+      <div class="job-perf-item">
+        <div class="job-perf-top">
+          <div class="job-perf-title">${esc(title)}</div>
+          <div class="job-perf-count">${count} applicant${count>1?'s':''}</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" style="width:${Math.round(count/max*100)}%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderChart(apps) {
+    const counts = {
+      pending: apps.filter(a => a.status === 'pending').length,
+      shortlisted: apps.filter(a => a.status === 'shortlisted').length,
+      rejected: apps.filter(a => a.status === 'rejected').length,
+    };
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Pending', 'Shortlisted', 'Rejected'],
+        datasets: [{
+          data: [counts.pending, counts.shortlisted, counts.rejected],
+          backgroundColor: ['rgba(245,158,11,0.8)', 'rgba(124,106,245,0.8)', 'rgba(239,68,68,0.8)'],
+          borderColor: ['#f59e0b', '#7c6af5', '#ef4444'],
+          borderWidth: 1,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#6b6b8a', font: { size: 11 }, padding: 16 } }
+        },
+        cutout: '65%'
+      }
+    });
+  }
+
+  // ── QUICK SHORTLIST/REJECT FROM DASHBOARD ──
+  async function quickAction(appId, status) {
+    try {
+      const res = await fetch(`/api/applications/${appId}/status`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(status === 'shortlisted' ? '✅ Shortlisted!' : '❌ Rejected', 'success');
+        // Add notification
+        if (status === 'shortlisted') {
+          addNotification('✅ Candidate Shortlisted', `Application #${appId} has been shortlisted.`);
+        }
+        loadDashboardData();
+      }
+    } catch(e) {
+      showToast('Action failed', '');
+    }
+  }
+
+  // ── HELPERS ──
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function scoreColor(score) {
+    if (score >= 70) return 'var(--green)';
+    if (score >= 45) return 'var(--yellow)';
+    return 'var(--red)';
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + (type || '');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.className = '', 3000);
+  }
+
+  // ── INIT ──
+  renderNotifications();
+  loadDashboardData();
+</script>
+</body>
+</html>

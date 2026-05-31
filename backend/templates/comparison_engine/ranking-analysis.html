@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Ranking Analysis - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/comparative-ai"     class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🤖 Comparative AI</a>
+    <a href="/market-insights"    class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🌐 Market Insights</a>
+    <a href="/ranking-analysis"   class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-purple-500/20 border-l-4 border-purple-400 mb-1">🏆 Ranking</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold">Ranking Analysis</h1>
+            <p class="text-gray-400 mt-1">AI-ranked leaderboard of all screened candidates</p>
+        </div>
+        <a href="/compare-candidates" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-xl font-bold transition-all text-sm">
+            ⚖️ Run Comparison
+        </a>
+    </div>
+
+    <!-- TOP 3 PODIUM -->
+    <div class="grid grid-cols-3 gap-6 mb-8">
+        <div class="bg-gray-900 rounded-2xl border border-gray-700 p-6 text-center mt-8">
+            <p class="text-4xl mb-2">🥈</p>
+            <p class="font-bold text-lg">Alex Kumar</p>
+            <p class="text-gray-400 text-sm">Backend Eng</p>
+            <p class="text-2xl font-bold text-blue-400 mt-2">87%</p>
+            <span class="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs mt-2 inline-block">Shortlist</span>
+        </div>
+        <div class="bg-gradient-to-b from-purple-600/20 to-gray-900 rounded-2xl border border-purple-500/40 p-6 text-center shadow-lg shadow-purple-500/10">
+            <p class="text-4xl mb-2">🥇</p>
+            <p class="font-bold text-xl">Jordan Sterling</p>
+            <p class="text-gray-400 text-sm">Cloud Architect</p>
+            <p class="text-3xl font-bold text-purple-400 mt-2">95%</p>
+            <span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs mt-2 inline-block">Hire</span>
+        </div>
+        <div class="bg-gray-900 rounded-2xl border border-gray-700 p-6 text-center mt-8">
+            <p class="text-4xl mb-2">🥉</p>
+            <p class="font-bold text-lg">Sarah Jenkins</p>
+            <p class="text-gray-400 text-sm">Frontend Dev</p>
+            <p class="text-2xl font-bold text-yellow-400 mt-2">79%</p>
+            <span class="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs mt-2 inline-block">Shortlist</span>
+        </div>
+    </div>
+
+    <!-- FULL RANKING TABLE -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-800">
+            <h3 class="font-bold text-lg">Full Candidate Ranking</h3>
+        </div>
+        <table class="w-full">
+            <thead>
+                <tr class="bg-purple-600/10 border-b border-gray-800">
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Rank</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Candidate</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Role</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Score</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Decision</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-800 hover:bg-white/5 transition-all">
+                    <td class="px-6 py-4 font-bold text-yellow-400">🥇 1</td>
+                    <td class="px-6 py-4 font-bold">Jordan Sterling</td>
+                    <td class="px-6 py-4 text-gray-400 text-sm">Cloud Architect</td>
+                    <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-20 h-2 bg-gray-800 rounded-full"><div class="h-full bg-purple-500 rounded-full" style="width:95%"></div></div><span class="text-purple-400 font-bold text-sm">95%</span></div></td>
+                    <td class="px-6 py-4"><span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs">Hire</span></td>
+                    <td class="px-6 py-4"><a href="/screening" class="text-purple-400 hover:underline text-sm">View →</a></td>
+                </tr>
+                <tr class="border-b border-gray-800 hover:bg-white/5 transition-all">
+                    <td class="px-6 py-4 font-bold text-gray-400">🥈 2</td>
+                    <td class="px-6 py-4 font-bold">Alex Kumar</td>
+                    <td class="px-6 py-4 text-gray-400 text-sm">Backend Engineer</td>
+                    <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-20 h-2 bg-gray-800 rounded-full"><div class="h-full bg-blue-500 rounded-full" style="width:87%"></div></div><span class="text-blue-400 font-bold text-sm">87%</span></div></td>
+                    <td class="px-6 py-4"><span class="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs">Shortlist</span></td>
+                    <td class="px-6 py-4"><a href="/screening" class="text-purple-400 hover:underline text-sm">View →</a></td>
+                </tr>
+                <tr class="border-b border-gray-800 hover:bg-white/5 transition-all">
+                    <td class="px-6 py-4 font-bold text-yellow-700">🥉 3</td>
+                    <td class="px-6 py-4 font-bold">Sarah Jenkins</td>
+                    <td class="px-6 py-4 text-gray-400 text-sm">Frontend Developer</td>
+                    <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-20 h-2 bg-gray-800 rounded-full"><div class="h-full bg-yellow-500 rounded-full" style="width:79%"></div></div><span class="text-yellow-400 font-bold text-sm">79%</span></div></td>
+                    <td class="px-6 py-4"><span class="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs">Shortlist</span></td>
+                    <td class="px-6 py-4"><a href="/screening" class="text-purple-400 hover:underline text-sm">View →</a></td>
+                </tr>
+                <tr class="border-b border-gray-800 hover:bg-white/5 transition-all">
+                    <td class="px-6 py-4 text-gray-500">4</td>
+                    <td class="px-6 py-4 font-bold">Priya Mehta</td>
+                    <td class="px-6 py-4 text-gray-400 text-sm">Data Scientist</td>
+                    <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-20 h-2 bg-gray-800 rounded-full"><div class="h-full bg-gray-500 rounded-full" style="width:65%"></div></div><span class="text-gray-400 font-bold text-sm">65%</span></div></td>
+                    <td class="px-6 py-4"><span class="bg-orange-500/20 text-orange-400 px-3 py-1 rounded-full text-xs">Maybe</span></td>
+                    <td class="px-6 py-4"><a href="/screening" class="text-purple-400 hover:underline text-sm">View →</a></td>
+                </tr>
+                <tr class="hover:bg-white/5 transition-all">
+                    <td class="px-6 py-4 text-gray-500">5</td>
+                    <td class="px-6 py-4 font-bold">Tom Richards</td>
+                    <td class="px-6 py-4 text-gray-400 text-sm">QA Engineer</td>
+                    <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-20 h-2 bg-gray-800 rounded-full"><div class="h-full bg-red-500 rounded-full" style="width:42%"></div></div><span class="text-red-400 font-bold text-sm">42%</span></div></td>
+                    <td class="px-6 py-4"><span class="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs">Reject</span></td>
+                    <td class="px-6 py-4"><a href="/screening" class="text-purple-400 hover:underline text-sm">View →</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+</body>
+</html>

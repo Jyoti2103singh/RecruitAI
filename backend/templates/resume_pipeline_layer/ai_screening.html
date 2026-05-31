@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Candidate Analysis - Lumina AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                "colors": {
+                    "tertiary-container": "#ff516a",
+                    "secondary-container": "#03b5d3",
+                    "surface-container-low": "#1b1b23",
+                    "outline": "#908fa0",
+                    "surface-container": "#1f1f27",
+                    "secondary": "#4cd7f6",
+                    "primary": "#c0c1ff",
+                    "surface-dim": "#13131b",
+                    "primary-fixed-dim": "#c0c1ff",
+                    "on-background": "#e4e1ed",
+                    "primary-container": "#8083ff",
+                    "surface": "#13131b",
+                    "on-surface-variant": "#c7c4d7",
+                    "primary-fixed": "#e1e0ff",
+                    "surface-container-lowest": "#0d0d15",
+                    "on-surface": "#e4e1ed",
+                    "surface-variant": "#34343d",
+                    "surface-bright": "#393841",
+                    "surface-container-highest": "#34343d",
+                    "tertiary": "#ffb2b7",
+                    "inverse-primary": "#494bd6",
+                    "surface-container-high": "#292932",
+                    "error": "#ffb4ab",
+                    "on-primary": "#1000a9",
+                    "background": "#13131b",
+                    "outline-variant": "#464554",
+                    "on-primary-container": "#0d0096"
+                },
+                "spacing": {
+                    "gutter": "24px", "sm": "12px", "xl": "64px",
+                    "xs": "4px", "base": "8px", "margin": "32px",
+                    "md": "24px", "lg": "40px"
+                },
+                "fontFamily": {
+                    "display-lg": ["Sora"], "label-md": ["Inter"],
+                    "body-lg": ["Inter"], "headline-lg": ["Sora"],
+                    "body-md": ["Inter"], "body-sm": ["Inter"],
+                    "headline-md": ["Sora"]
+                },
+                "fontSize": {
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+                }
+            }
+        }
+    }
+</script>
+<style>
+    .glass-card {
+        background: rgba(30, 41, 59, 0.4);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .progress-ring-circle {
+        transition: stroke-dashoffset 1s ease;
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+    }
+    .skill-bar {
+        background: linear-gradient(90deg, #03b5d3 0%, #c0c1ff 100%);
+    }
+    body { min-height: max(884px, 100dvh); }
+</style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex font-body-md overflow-x-hidden">
+
+<!-- SIDEBAR -->
+<nav class="fixed left-0 top-0 h-full w-[260px] bg-surface-container-low/90 backdrop-blur-xl border-r border-white/10 shadow-xl flex flex-col py-lg px-md gap-base z-50">
+    <div class="mb-lg px-4">
+        <h1 class="font-display-lg text-headline-md text-primary font-bold">Lumina AI</h1>
+    </div>
+    <div class="flex flex-col gap-2 flex-grow">
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/dashboard">
+            <span class="material-symbols-outlined text-primary">dashboard</span>
+            <span class="font-body-md">Dashboard</span>
+        </a>
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/upload">
+            <span class="material-symbols-outlined">upload_file</span>
+            <span class="font-body-md">Upload Resume</span>
+        </a>
+        <a class="flex items-center gap-4 bg-primary-container text-on-primary-container rounded-xl px-4 py-3 border-l-4 border-primary" href="/screening">
+            <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">manage_search</span>
+            <span class="font-body-md">AI Screening</span>
+        </a>
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/candidates">
+            <span class="material-symbols-outlined">groups</span>
+            <span class="font-body-md">Candidates</span>
+        </a>
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/ai-interviewer">
+            <span class="material-symbols-outlined">video_chat</span>
+            <span class="font-body-md">AI Interviewer</span>
+        </a>
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/compare-candidates">
+            <span class="material-symbols-outlined">compare_arrows</span>
+            <span class="font-body-md">Comparison</span>
+        </a>
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/analytics">
+            <span class="material-symbols-outlined">monitoring</span>
+            <span class="font-body-md">Analytics</span>
+        </a>
+        <a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-white/5 rounded-xl transition-all" href="/history">
+            <span class="material-symbols-outlined">history</span>
+            <span class="font-body-md">History</span>
+        </a>
+        <a class="flex items-center gap-4 text-red-400 px-4 py-3 hover:bg-red-500/10 rounded-xl mt-2" href="/logout">
+            <span class="material-symbols-outlined">logout</span>
+            <span class="font-body-md">Logout</span>
+        </a>
+    </div>
+    <div class="mt-auto border-t border-white/5 pt-md px-4 flex items-center gap-4">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+            <span class="material-symbols-outlined text-primary">person</span>
+        </div>
+        <div class="flex flex-col overflow-hidden">
+            <span class="font-body-md font-bold text-on-surface truncate">{{ session.get('user', 'Recruiter') }}</span>
+            <span class="text-body-sm text-on-surface-variant truncate">Enterprise Tier</span>
+        </div>
+    </div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main class="flex-grow ml-[260px] p-gutter relative">
+
+    <!-- TOP BAR -->
+    <header class="fixed top-0 left-[260px] right-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-gutter py-4">
+        <div class="flex items-center gap-base">
+            <span class="material-symbols-outlined text-primary">clinical_notes</span>
+            <h2 class="font-display-lg text-headline-md font-bold text-primary">Candidate Profile Analysis</h2>
+        </div>
+        <div class="flex items-center gap-md">
+            <a href="/upload" class="border border-outline-variant/30 px-md py-sm rounded-xl font-label-md hover:bg-white/5 transition-all">
+                Upload New
+            </a>
+            <a href="/results" class="bg-primary text-on-primary font-label-md px-md py-sm rounded-xl hover:bg-primary/90 transition-all">
+                View Results
+            </a>
+        </div>
+    </header>
+
+    <!-- CONTENT AREA -->
+    <div class="mt-20 max-w-7xl mx-auto space-y-md">
+
+        <!-- HERO HEADER -->
+        <section class="glass-card rounded-xl p-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-lg">
+            <div class="flex items-center gap-lg">
+                <div class="relative">
+                    <div class="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-primary to-secondary flex items-center justify-center">
+                        <div class="w-full h-full rounded-full bg-surface-container flex items-center justify-center text-4xl">
+                            👤
+                        </div>
+                    </div>
+                    <div class="absolute -bottom-1 -right-1 bg-green-500 w-6 h-6 rounded-full border-4 border-surface"></div>
+                </div>
+                <div>
+                    <div class="flex items-center gap-sm flex-wrap">
+                        <h3 class="font-display-lg text-headline-lg text-on-surface">
+                            {{ candidate_name or "Unknown Candidate" }}
+                        </h3>
+                        <span class="px-3 py-1 rounded-full text-label-md border
+                            {% if decision == 'HIRE' %}bg-green-500/10 text-green-400 border-green-500/20
+                            {% elif decision == 'SHORTLIST' %}bg-yellow-500/10 text-yellow-400 border-yellow-500/20
+                            {% else %}bg-red-500/10 text-red-400 border-red-500/20{% endif %}">
+                            {{ decision or "PENDING" }}
+                        </span>
+                    </div>
+                    <p class="text-body-lg text-on-surface-variant mt-1">
+                        {{ job_role or "General Role" }}
+                        {% if candidate_email != "N/A" %} • {{ candidate_email }}{% endif %}
+                        {% if candidate_phone != "N/A" %} • {{ candidate_phone }}{% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-sm flex-wrap">
+                <a href="/upload" class="px-md py-sm border border-outline-variant/30 rounded-xl font-label-md hover:bg-white/5 transition-all">
+                    Upload New
+                </a>
+                <a href="/ai-interviewer" class="px-md py-sm bg-primary text-on-primary rounded-xl font-label-md hover:opacity-90 transition-all shadow-lg shadow-primary/20">
+                    Schedule Interview
+                </a>
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-md">
+
+            <!-- ATS SCORE -->
+            <div class="md:col-span-4 glass-card rounded-xl p-lg flex flex-col items-center justify-center text-center">
+                <h4 class="font-headline-md text-on-surface-variant mb-lg">ATS Match Score</h4>
+                <div class="relative w-48 h-48 flex items-center justify-center">
+                    <svg class="w-full h-full" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" fill="transparent" r="45"
+                            stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
+                        <circle class="progress-ring-circle" cx="50" cy="50"
+                            fill="transparent" r="45"
+                            stroke="url(#indigoGradient)"
+                            stroke-dasharray="282.7"
+                            stroke-dashoffset="{{ 282.7 - (282.7 * ats_score / 100) }}"
+                            stroke-linecap="round" stroke-width="8"/>
+                        <defs>
+                            <linearGradient id="indigoGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#03b5d3"/>
+                                <stop offset="100%" stop-color="#c0c1ff"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="font-display-lg text-display-lg text-primary">{{ ats_score or 0 }}%</span>
+                        <span class="text-label-md text-on-surface-variant uppercase tracking-widest">
+                            {% if ats_score >= 75 %}Optimized
+                            {% elif ats_score >= 55 %}Average
+                            {% else %}Low{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <p class="mt-lg text-body-sm text-on-surface-variant">
+                    {% if ats_score >= 75 %}Top candidate for this role
+                    {% elif ats_score >= 55 %}Moderate match for this role
+                    {% else %}Low match — consider other candidates{% endif %}
+                </p>
+            </div>
+
+            <!-- SKILLS -->
+            <div class="md:col-span-8 glass-card rounded-xl p-lg space-y-lg">
+                <div class="flex justify-between items-center border-b border-white/5 pb-sm">
+                    <h4 class="font-headline-md text-on-surface">Core Competencies</h4>
+                    <span class="text-secondary text-label-md flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">auto_awesome</span> AI Verified
+                    </span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-xl">
+                    <div class="space-y-md">
+                        {% if skills %}
+                            {% for skill in skills %}
+                            <div class="space-y-xs">
+                                <div class="flex justify-between text-label-md text-on-surface-variant">
+                                    <span>{{ skill.name if skill is mapping else skill }}</span>
+                                    <span>{{ skill.score if skill is mapping else 80 }}%</span>
+                                </div>
+                                <div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+                                    <div class="h-full skill-bar rounded-full"
+                                        style="width: {{ skill.score if skill is mapping else 80 }}%">
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-on-surface-variant text-body-sm italic">
+                                No skills detected. Try uploading a more detailed resume.
+                            </p>
+                        {% endif %}
+                    </div>
+                    <div class="space-y-md">
+                        <h5 class="text-label-md text-on-surface-variant uppercase tracking-widest border-l-2 border-tertiary pl-2">
+                            Missing Skills
+                        </h5>
+                        <div class="flex flex-wrap gap-2">
+                            {% for ms in missing_skills or [] %}
+                            <span class="bg-tertiary-container/10 text-tertiary px-3 py-1 rounded-full text-label-md border border-tertiary/20 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-xs">close</span> {{ ms }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-4 space-y-2 text-body-sm text-on-surface-variant">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-sm text-secondary">email</span>
+                                <span>{{ candidate_email or "N/A" }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-sm text-secondary">phone</span>
+                                <span>{{ candidate_phone or "N/A" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI INSIGHTS -->
+            <div class="md:col-span-7 glass-card rounded-xl p-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-lg opacity-10">
+                    <span class="material-symbols-outlined text-[120px]"
+                        style="font-variation-settings:'FILL' 1;">psychology</span>
+                </div>
+                <h4 class="font-headline-md text-on-surface mb-md">Lumina AI Insights</h4>
+                <div class="space-y-md relative z-10">
+                    <div class="bg-primary/5 border-l-4 border-primary p-md rounded-r-lg">
+                        <p class="text-body-md text-on-surface leading-relaxed">
+                            {{ insight or "No insight available. Please upload a resume first." }}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-md">
+                        <div class="flex-grow bg-surface-container-high/50 p-sm rounded-lg border border-white/5">
+                            <span class="text-label-md text-on-surface-variant block mb-1">Decision Confidence</span>
+                            <div class="flex items-center gap-2">
+                                <div class="flex-grow h-1 bg-surface-container rounded-full">
+                                    <div class="h-full bg-secondary rounded-full"
+                                        style="width: {{ confidence or 0 }}%"></div>
+                                </div>
+                                <span class="text-secondary font-bold">{{ confidence or 0 }}%</span>
+                            </div>
+                        </div>
+                        <div class="px-lg py-md rounded-xl font-display-lg text-headline-md flex items-center gap-2 shadow-lg
+                            {% if decision == 'HIRE' %}bg-green-500/20 text-green-400
+                            {% elif decision == 'SHORTLIST' %}bg-yellow-500/20 text-yellow-400
+                            {% else %}bg-red-500/20 text-red-400{% endif %}">
+                            <span class="material-symbols-outlined"
+                                style="font-variation-settings:'FILL' 1;">
+                                {% if decision == 'HIRE' %}check_circle
+                                {% elif decision == 'SHORTLIST' %}pending
+                                {% else %}cancel{% endif %}
+                            </span>
+                            {{ decision or "PENDING" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INTEGRITY GUARD -->
+            <div class="md:col-span-5 glass-card rounded-xl p-lg">
+                <div class="flex justify-between items-center mb-md">
+                    <h4 class="font-headline-md text-on-surface">Integrity Guard</h4>
+                    <span class="bg-green-500/10 text-green-400 px-2 py-0.5 rounded text-[10px] font-bold border border-green-500/20 uppercase">
+                        Verified
+                    </span>
+                </div>
+                <div class="space-y-md">
+                    <div class="flex items-center justify-between p-sm rounded-lg bg-surface-container-high/30 border border-white/5">
+                        <div class="flex items-center gap-sm">
+                            <span class="material-symbols-outlined text-green-400">task_alt</span>
+                            <span class="text-body-sm">Resume Consistency</span>
+                        </div>
+                        <span class="text-label-md text-on-surface-variant">
+                            {% if ats_score > 0 %}No anomalies{% else %}Not checked{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between p-sm rounded-lg bg-surface-container-high/30 border border-white/5">
+                        <div class="flex items-center gap-sm">
+                            <span class="material-symbols-outlined text-green-400">task_alt</span>
+                            <span class="text-body-sm">Email Detected</span>
+                        </div>
+                        <span class="text-label-md text-on-surface-variant">
+                            {% if candidate_email != "N/A" %}✅ Found{% else %}❌ Not found{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between p-sm rounded-lg bg-surface-container-high/30 border border-white/5">
+                        <div class="flex items-center gap-sm">
+                            <span class="material-symbols-outlined text-secondary">info</span>
+                            <span class="text-body-sm">Skills Detected</span>
+                        </div>
+                        <span class="text-label-md text-on-surface-variant">{{ skills | length }}</span>
+                    </div>
+                    <div class="p-sm bg-secondary/5 rounded-lg border border-secondary/10 flex gap-sm">
+                        <span class="material-symbols-outlined text-secondary text-sm">shield</span>
+                        <p class="text-[12px] text-secondary/80">
+                            Resume parsed and analyzed with {{ ats_score }}% confidence score.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INTERVIEW QUESTIONS -->
+            <div class="md:col-span-12 glass-card rounded-xl p-lg">
+                <div class="flex justify-between items-center mb-lg">
+                    <div>
+                        <h4 class="font-headline-md text-on-surface">AI-Generated Interview Strategy</h4>
+                        <p class="text-body-sm text-on-surface-variant">
+                            Personalized questions for {{ candidate_name or "this candidate" }}
+                            applying for {{ job_role or "this role" }}.
+                        </p>
+                    </div>
+                    <a href="/ai-interviewer" class="flex items-center gap-2 text-primary font-label-md border border-primary/20 px-md py-sm rounded-xl hover:bg-primary/5 transition-all">
+                        <span class="material-symbols-outlined text-sm">refresh</span> More Questions
+                    </a>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+                    <div class="p-md rounded-xl border border-white/5 bg-white/5 hover:border-primary/40 transition-all">
+                        <div class="flex gap-md">
+                            <div class="bg-primary/20 text-primary w-8 h-8 rounded-lg flex items-center justify-center font-bold flex-shrink-0">1</div>
+                            <div class="space-y-2">
+                                <p class="font-body-md font-bold text-on-surface">
+                                    "Walk me through your most complex project and your role in it."
+                                </p>
+                                <p class="text-body-sm text-on-surface-variant">
+                                    Objective: Assess depth of experience and ownership.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-md rounded-xl border border-white/5 bg-white/5 hover:border-primary/40 transition-all">
+                        <div class="flex gap-md">
+                            <div class="bg-primary/20 text-primary w-8 h-8 rounded-lg flex items-center justify-center font-bold flex-shrink-0">2</div>
+                            <div class="space-y-2">
+                                <p class="font-body-md font-bold text-on-surface">
+                                    {% if skills %}
+                                    "Can you demonstrate your experience with {{ skills[0].name if skills[0] is mapping else skills[0] }}?"
+                                    {% else %}
+                                    "What are your strongest technical skills and how have you applied them?"
+                                    {% endif %}
+                                </p>
+                                <p class="text-body-sm text-on-surface-variant">
+                                    Objective: Verify top detected skill depth.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-md rounded-xl border border-white/5 bg-white/5 hover:border-primary/40 transition-all">
+                        <div class="flex gap-md">
+                            <div class="bg-primary/20 text-primary w-8 h-8 rounded-lg flex items-center justify-center font-bold flex-shrink-0">3</div>
+                            <div class="space-y-2">
+                                <p class="font-body-md font-bold text-on-surface">
+                                    "How do you handle tight deadlines and shifting priorities?"
+                                </p>
+                                <p class="text-body-sm text-on-surface-variant">
+                                    Objective: Gauge cultural fit and stress management.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-md rounded-xl border border-white/5 bg-white/5 hover:border-primary/40 transition-all">
+                        <div class="flex gap-md">
+                            <div class="bg-primary/20 text-primary w-8 h-8 rounded-lg flex items-center justify-center font-bold flex-shrink-0">4</div>
+                            <div class="space-y-2">
+                                <p class="font-body-md font-bold text-on-surface">
+                                    "Where do you see yourself growing in the next 2 years?"
+                                </p>
+                                <p class="text-body-sm text-on-surface-variant">
+                                    Objective: Assess long-term alignment with role.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ACTION BUTTONS -->
+                <div class="flex gap-md mt-lg flex-wrap">
+                    <form method="POST" action="/generate-report">
+                        <input type="hidden" name="candidate_name" value="{{ candidate_name }}">
+                        <button class="bg-primary text-on-primary px-lg py-sm rounded-xl font-label-md hover:brightness-110 transition-all flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm">description</span>
+                            Generate Report
+                        </button>
+                    </form>
+                    <a href="/compare-candidates" class="border border-primary/30 text-primary px-lg py-sm rounded-xl font-label-md hover:bg-primary/10 transition-all flex items-center gap-2">
+                        <span class="material-symbols-outlined text-sm">compare_arrows</span>
+                        Compare Candidates
+                    </a>
+                    <a href="/results" class="border border-secondary/30 text-secondary px-lg py-sm rounded-xl font-label-md hover:bg-secondary/10 transition-all flex items-center gap-2">
+                        <span class="material-symbols-outlined text-sm">analytics</span>
+                        View All Results
+                    </a>
+                    <a href="/candidates" class="border border-outline-variant/30 text-on-surface-variant px-lg py-sm rounded-xl font-label-md hover:bg-white/5 transition-all flex items-center gap-2">
+                        <span class="material-symbols-outlined text-sm">groups</span>
+                        All Candidates
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="w-full py-md mt-lg border-t border-outline-variant/20 bg-surface-container-lowest flex flex-col md:flex-row justify-between items-center px-gutter gap-md">
+        <span class="font-body-sm text-secondary">© 2026 Lumina AI. Human-Centric Intelligence.</span>
+        <div class="flex gap-md">
+            <a class="text-on-surface-variant hover:text-primary font-body-sm" href="#">Privacy</a>
+            <a class="text-on-surface-variant hover:text-primary font-body-sm" href="#">Terms</a>
+        </div>
+    </footer>
+
+</main>
+
+<script>
+    document.querySelectorAll('.glass-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'translateY(-2px)';
+            card.style.transition = 'all 0.3s ease';
+            card.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)';
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translateY(0)';
+            card.style.boxShadow = 'none';
+        });
+    });
+</script>
+</body>
+</html>

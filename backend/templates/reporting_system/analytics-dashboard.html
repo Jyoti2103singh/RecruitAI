@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Analytics - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<!-- NAV -->
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
+    <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
+    <a href="/results"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📋 Results</a>
+    <a href="/candidates"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">👥 Candidates</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🕐 History</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-purple-500/20 border-l-4 border-purple-400 mb-1">📈 Analytics</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold">Analytics Dashboard</h1>
+            <p class="text-gray-400 mt-1">Insights across your recruitment pipeline</p>
+        </div>
+        <a href="/download-report" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-xl font-bold transition-all">
+            📥 Download Report
+        </a>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-2">Total Resumes</p>
+            <p class="text-3xl font-bold text-purple-400">1,284</p>
+            <p class="text-green-400 text-sm mt-1">↑ 12% this week</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-2">Avg ATS Score</p>
+            <p class="text-3xl font-bold text-blue-400">84%</p>
+            <p class="text-gray-500 text-sm mt-1">Stable</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-2">Hired</p>
+            <p class="text-3xl font-bold text-green-400">42</p>
+            <p class="text-green-400 text-sm mt-1">↑ 5 this month</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-2">Rejected</p>
+            <p class="text-3xl font-bold text-red-400">318</p>
+            <p class="text-gray-500 text-sm mt-1">24% rejection rate</p>
+        </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+            <h3 class="font-bold text-lg mb-4">Applications Over Time</h3>
+            <canvas id="lineChart" height="200"></canvas>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+            <h3 class="font-bold text-lg mb-4">Candidate Decision Breakdown</h3>
+            <canvas id="doughnutChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- TOP SKILLS TABLE -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-800">
+            <h3 class="font-bold text-lg">Top Skills in Candidate Pool</h3>
+        </div>
+        <table class="w-full">
+            <thead>
+                <tr class="bg-purple-600/10 border-b border-gray-800">
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Skill</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Candidates</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Avg Score</th>
+                    <th class="text-left px-6 py-3 text-purple-300 text-sm">Demand</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-800 hover:bg-white/5">
+                    <td class="px-6 py-3 font-bold">Python</td>
+                    <td class="px-6 py-3 text-gray-400">342</td>
+                    <td class="px-6 py-3 text-green-400">88%</td>
+                    <td class="px-6 py-3"><span class="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs">High</span></td>
+                </tr>
+                <tr class="border-b border-gray-800 hover:bg-white/5">
+                    <td class="px-6 py-3 font-bold">JavaScript</td>
+                    <td class="px-6 py-3 text-gray-400">289</td>
+                    <td class="px-6 py-3 text-green-400">85%</td>
+                    <td class="px-6 py-3"><span class="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs">High</span></td>
+                </tr>
+                <tr class="border-b border-gray-800 hover:bg-white/5">
+                    <td class="px-6 py-3 font-bold">React</td>
+                    <td class="px-6 py-3 text-gray-400">201</td>
+                    <td class="px-6 py-3 text-blue-400">79%</td>
+                    <td class="px-6 py-3"><span class="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full text-xs">Medium</span></td>
+                </tr>
+                <tr class="border-b border-gray-800 hover:bg-white/5">
+                    <td class="px-6 py-3 font-bold">AWS</td>
+                    <td class="px-6 py-3 text-gray-400">156</td>
+                    <td class="px-6 py-3 text-blue-400">76%</td>
+                    <td class="px-6 py-3"><span class="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs">High</span></td>
+                </tr>
+                <tr class="hover:bg-white/5">
+                    <td class="px-6 py-3 font-bold">Docker</td>
+                    <td class="px-6 py-3 text-gray-400">98</td>
+                    <td class="px-6 py-3 text-yellow-400">71%</td>
+                    <td class="px-6 py-3"><span class="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full text-xs">Growing</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<script>
+    // Line Chart
+    new Chart(document.getElementById('lineChart'), {
+        type: 'line',
+        data: {
+            labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+            datasets: [{
+                label: 'Applications',
+                data: [65, 89, 72, 95, 110, 85, 120],
+                borderColor: '#a78bfa',
+                backgroundColor: 'rgba(167,139,250,0.1)',
+                tension: 0.4, fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#9ca3af' } } },
+            scales: {
+                x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+
+    // Doughnut Chart
+    new Chart(document.getElementById('doughnutChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Hired', 'Shortlisted', 'Maybe', 'Rejected'],
+            datasets: [{
+                data: [42, 189, 95, 318],
+                backgroundColor: ['#4ade80','#60a5fa','#fbbf24','#f87171'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#9ca3af' } } },
+            cutout: '65%'
+        }
+    });
+</script>
+</body>
+</html>

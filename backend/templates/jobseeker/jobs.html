@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Browse Jobs | AIScreen</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+    --border: rgba(255,255,255,0.07);
+    --purple: #7c5cbf; --purple-bright: #9b7de8; --purple-glow: rgba(124,92,191,0.25);
+    --text: #e8e8f0; --muted: #6b6b80;
+    --success: #4ade80; --danger: #f87171; --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; display: flex; }
+  .sidebar { width: 220px; min-height: 100vh; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 0; position: fixed; left: 0; top: 0; bottom: 0; }
+  .logo { padding: 0 20px 28px; font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; color: var(--purple-bright); }
+  .logo span { color: var(--text); }
+  .user-chip { margin: 0 12px 20px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+  .user-avatar { width: 32px; height: 32px; border-radius: 8px; background: var(--purple-glow); display: flex; align-items: center; justify-content: center; color: var(--purple-bright); font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .user-name { font-size: 13px; font-weight: 600; }
+  .user-role { font-size: 10px; color: var(--purple-bright); text-transform: uppercase; letter-spacing: 0.8px; }
+  .nav-section { padding: 0 12px; margin-bottom: 8px; }
+  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); padding: 0 8px; margin-bottom: 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--muted); font-size: 13.5px; text-decoration: none; transition: all 0.2s; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--purple-glow); color: var(--purple-bright); }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar-bottom { margin-top: auto; padding: 0 12px; }
+  .logout-btn { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--danger); font-size: 13.5px; text-decoration: none; transition: all 0.2s; width: 100%; background: none; border: none; cursor: pointer; font-family: inherit; }
+  .logout-btn:hover { background: rgba(248,113,113,0.08); }
+  .main { margin-left: 220px; flex: 1; padding: 40px; }
+  .page-header { margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+  .page-header h1 { font-family: 'Space Mono', monospace; font-size: 26px; font-weight: 700; }
+  .page-header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  .search-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .search-input-wrap { flex: 1; min-width: 220px; position: relative; }
+  .search-input-wrap i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .search-input-wrap input { width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 16px 11px 40px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; transition: border-color 0.2s; }
+  .search-input-wrap input:focus { border-color: var(--purple); }
+  .filter-select { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 16px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; cursor: pointer; }
+  .filter-select option { background: var(--bg2); }
+  .jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .job-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px; transition: border-color 0.2s, transform 0.2s; }
+  .job-card:hover { border-color: var(--purple); transform: translateY(-2px); }
+  .job-card-top { display: flex; align-items: flex-start; gap: 14px; }
+  .job-icon { width: 46px; height: 46px; border-radius: 12px; background: var(--purple-glow); display: flex; align-items: center; justify-content: center; color: var(--purple-bright); font-size: 20px; flex-shrink: 0; }
+  .job-title-wrap { flex: 1; }
+  .job-title { font-weight: 600; font-size: 15.5px; margin-bottom: 3px; }
+  .job-company { font-size: 13px; color: var(--muted); }
+  .job-type-badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .job-type-badge.full { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.25); }
+  .job-type-badge.intern { background: rgba(251,191,36,0.1); color: var(--warn); border: 1px solid rgba(251,191,36,0.25); }
+  .job-type-badge.contract { background: rgba(124,92,191,0.15); color: var(--purple-bright); border: 1px solid var(--purple); }
+  .job-type-badge.part { background: rgba(248,113,113,0.1); color: var(--danger); border: 1px solid rgba(248,113,113,0.25); }
+  .job-meta { display: flex; gap: 14px; flex-wrap: wrap; }
+  .job-meta span { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .job-desc { font-size: 13.5px; color: var(--muted); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .job-skills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .skill-chip { background: var(--bg3); border: 1px solid var(--border); color: var(--muted); padding: 3px 9px; border-radius: 12px; font-size: 11.5px; }
+  .job-card-footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 14px; margin-top: auto; }
+  .job-salary { font-size: 13px; color: var(--success); font-weight: 600; }
+  .job-date { font-size: 11.5px; color: var(--muted); }
+  .apply-btn { background: var(--purple); color: #fff; border: none; padding: 9px 20px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; display: flex; align-items: center; gap: 7px; }
+  .apply-btn:hover { background: var(--purple-bright); transform: translateY(-1px); }
+  .apply-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .apply-btn.applied { background: rgba(74,222,128,0.15); border: 1px solid rgba(74,222,128,0.3); color: var(--success); }
+  .empty-state { text-align: center; padding: 80px 24px; color: var(--muted); grid-column: 1/-1; }
+  .empty-state i { font-size: 48px; display: block; margin-bottom: 16px; opacity: 0.2; }
+  .empty-state p { font-size: 16px; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 32px; width: 100%; max-width: 480px; transform: translateY(20px); transition: transform 0.25s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-title { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .modal-sub { font-size: 13.5px; color: var(--muted); margin-bottom: 24px; }
+  .modal-field { margin-bottom: 16px; }
+  .modal-field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; display: block; margin-bottom: 7px; }
+  .modal-field input, .modal-field textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; transition: border-color 0.2s; resize: none; }
+  .modal-field input:focus, .modal-field textarea:focus { border-color: var(--purple); }
+  .modal-field textarea { min-height: 90px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .btn { padding: 11px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-primary { background: var(--purple); color: #fff; }
+  .btn-primary:hover { background: var(--purple-bright); }
+  .toast { position: fixed; bottom: 32px; right: 32px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 22px; display: flex; align-items: center; gap: 12px; font-size: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transform: translateY(80px); opacity: 0; transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1); z-index: 999; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success i { color: var(--success); }
+  .toast.error i { color: var(--danger); }
+  .spinner { display: flex; align-items: center; justify-content: center; padding: 80px; grid-column: 1/-1; }
+  .spinner i { font-size: 28px; color: var(--purple); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">AI<span>Screen</span></div>
+  <div class="user-chip">
+    <div class="user-avatar" id="avatarLetter">J</div>
+    <div><div class="user-name" id="sidebarUser">{{ session.get('user', 'Jobseeker') }}</div><div class="user-role">Job Seeker</div></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">My Space</div>
+    <a href="/jobseeker/dashboard" class="nav-item"><i class="fas fa-th-large"></i> Dashboard</a>
+    <a href="/jobseeker/applications" class="nav-item"><i class="fas fa-file-alt"></i> My Applications</a>
+    <a href="/jobseeker/jobs" class="nav-item active"><i class="fas fa-briefcase"></i> Browse Jobs</a>
+  </div>
+  <div class="sidebar-bottom">
+    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="page-header">
+    <div>
+      <h1>Browse Jobs</h1>
+      <p id="jobsSubtitle">Loading available positions…</p>
+    </div>
+  </div>
+  <div class="search-bar">
+    <div class="search-input-wrap">
+      <i class="fas fa-search"></i>
+      <input type="text" id="searchInput" placeholder="Search by title, company, or skill…" oninput="filterJobs()"/>
+    </div>
+    <select class="filter-select" id="typeFilter" onchange="filterJobs()">
+      <option value="">All Types</option>
+      <option value="Full-time">Full-time</option>
+      <option value="Part-time">Part-time</option>
+      <option value="Contract">Contract</option>
+      <option value="Internship">Internship</option>
+      <option value="Freelance">Freelance</option>
+    </select>
+  </div>
+  <div class="jobs-grid" id="jobsGrid">
+    <div class="spinner"><i class="fas fa-spinner"></i></div>
+  </div>
+</main>
+
+<!-- APPLY MODAL -->
+<div class="modal-overlay" id="applyModal">
+  <div class="modal">
+    <div class="modal-title" id="modalJobTitle">Apply for Job</div>
+    <div class="modal-sub">Your resume score and profile will be sent to the recruiter</div>
+    <div class="modal-field">
+      <label>Cover Note (optional)</label>
+      <textarea id="coverNote" placeholder="Why are you a good fit for this role?"></textarea>
+    </div>
+    <div class="modal-field">
+      <label>LinkedIn / Portfolio URL</label>
+      <input type="url" id="portfolioUrl" placeholder="https://linkedin.com/in/yourname"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirmApplyBtn" onclick="confirmApply()">
+        <i class="fas fa-paper-plane"></i> Submit Application
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg"></span></div>
+
+<script>
+  let allJobs = [];
+  let appliedJobs = new Set();
+  let selectedJobId = null;
+
+  // Set avatar letter from username
+  const username = document.getElementById('sidebarUser').textContent.trim();
+  document.getElementById('avatarLetter').textContent = username[0] ? username[0].toUpperCase() : 'J';
+
+  function badgeClass(type) {
+    if (!type) return 'full';
+    const t = type.toLowerCase();
+    if (t.includes('intern')) return 'intern';
+    if (t.includes('contract') || t.includes('freelance')) return 'contract';
+    if (t.includes('part')) return 'part';
+    return 'full';
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return days + 'd ago';
+    if (days < 30) return Math.floor(days/7) + 'w ago';
+    return Math.floor(days/30) + 'mo ago';
+  }
+
+  function renderJobs(jobs) {
+    const grid = document.getElementById('jobsGrid');
+    if (!jobs.length) {
+      grid.innerHTML = '<div class="empty-state"><i class="fas fa-briefcase"></i><p>No jobs match your search</p></div>';
+      return;
+    }
+    grid.innerHTML = jobs.map(function(j) {
+      const skillList = Array.isArray(j.skills_list) ? j.skills_list : [];
+      const isApplied = appliedJobs.has(j.id);
+      return '<div class="job-card">' +
+        '<div class="job-card-top">' +
+          '<div class="job-icon"><i class="fas fa-briefcase"></i></div>' +
+          '<div class="job-title-wrap">' +
+            '<div class="job-title">' + j.title + '</div>' +
+            '<div class="job-company">' + (j.company || 'Company') + '</div>' +
+          '</div>' +
+          '<span class="job-type-badge ' + badgeClass(j.job_type) + '">' + (j.job_type || 'Full-time') + '</span>' +
+        '</div>' +
+        '<div class="job-meta">' +
+          (j.location ? '<span><i class="fas fa-map-marker-alt"></i>' + j.location + '</span>' : '') +
+          (j.experience ? '<span><i class="fas fa-clock"></i>' + j.experience + '</span>' : '') +
+          '<span><i class="fas fa-users"></i>' + (j.applicant_count || 0) + ' applicants</span>' +
+        '</div>' +
+        (j.description ? '<div class="job-desc">' + j.description + '</div>' : '') +
+        (skillList.length ? '<div class="job-skills">' + skillList.slice(0,6).map(function(s){ return '<span class="skill-chip">' + s + '</span>'; }).join('') + (skillList.length > 6 ? '<span class="skill-chip">+' + (skillList.length-6) + '</span>' : '') + '</div>' : '') +
+        '<div class="job-card-footer">' +
+          '<div>' +
+            (j.salary ? '<div class="job-salary">' + j.salary + '</div>' : '') +
+            '<div class="job-date">' + timeAgo(j.created_at) + '</div>' +
+          '</div>' +
+          '<button class="apply-btn' + (isApplied ? ' applied' : '') + '" onclick="openApplyModal(' + j.id + ', \'' + j.title.replace(/'/g, "\\'") + '\')" ' + (isApplied ? 'disabled' : '') + '>' +
+            (isApplied ? '<i class="fas fa-check"></i> Applied' : '<i class="fas fa-paper-plane"></i> Apply') +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function filterJobs() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const type = document.getElementById('typeFilter').value;
+    const filtered = allJobs.filter(function(j) {
+      const matchQ = !q || j.title.toLowerCase().includes(q) || (j.company||'').toLowerCase().includes(q) || (j.skills||'').toLowerCase().includes(q);
+      const matchType = !type || j.job_type === type;
+      return matchQ && matchType;
+    });
+    renderJobs(filtered);
+  }
+
+  function openApplyModal(jobId, jobTitle) {
+    selectedJobId = jobId;
+    document.getElementById('modalJobTitle').textContent = 'Apply — ' + jobTitle;
+    document.getElementById('coverNote').value = '';
+    document.getElementById('portfolioUrl').value = '';
+    document.getElementById('applyModal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('applyModal').classList.remove('open');
+    selectedJobId = null;
+  }
+
+  function confirmApply() {
+    if (!selectedJobId) return;
+    const btn = document.getElementById('confirmApplyBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting…';
+
+    fetch('/api/jobs/' + selectedJobId + '/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        cover_note: document.getElementById('coverNote').value,
+        portfolio_url: document.getElementById('portfolioUrl').value
+      })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success) {
+        appliedJobs.add(selectedJobId);
+        showToast('Application submitted!', 'success');
+        closeModal();
+        filterJobs();
+      } else if (data.error === 'Already applied') {
+        showToast('You already applied for this job!', 'error');
+        appliedJobs.add(selectedJobId);
+        closeModal();
+        filterJobs();
+      } else {
+        showToast(data.error || 'Failed to apply', 'error');
+      }
+    })
+    .catch(function() { showToast('Network error', 'error'); })
+    .finally(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Application';
+    });
+  }
+
+  function showToast(msg, type) {
+    type = type || 'success';
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    t.className = 'toast ' + type + ' show';
+    t.querySelector('i').className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+    setTimeout(function() { t.classList.remove('show'); }, 3500);
+  }
+
+  function loadData() {
+    Promise.all([
+      fetch('/api/jobs').then(function(r) { return r.json(); }),
+      fetch('/api/my-applications').then(function(r) { return r.json(); }).catch(function() { return []; })
+    ]).then(function(results) {
+      allJobs = results[0];
+      const applied = results[1];
+      applied.forEach(function(a) { appliedJobs.add(a.job_id); });
+      document.getElementById('jobsSubtitle').textContent = allJobs.length + ' open position' + (allJobs.length !== 1 ? 's' : '') + ' available';
+      renderJobs(allJobs);
+    }).catch(function() {
+      document.getElementById('jobsGrid').innerHTML = '<div class="empty-state"><i class="fas fa-briefcase"></i><p>Could not load jobs</p></div>';
+    });
+  }
+
+  loadData();
+</script>
+</body>
+</html>

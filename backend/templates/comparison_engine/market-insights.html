@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Market Insights - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/comparative-ai"     class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🤖 Comparative AI</a>
+    <a href="/market-insights"    class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-purple-500/20 border-l-4 border-purple-400 mb-1">🌐 Market Insights</a>
+    <a href="/ranking-analysis"   class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🏆 Ranking</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🏠 Home</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold">Market Insights</h1>
+        <p class="text-gray-400 mt-1">Real-time talent market trends and salary benchmarks</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-1">Python Demand</p>
+            <p class="text-2xl font-bold text-green-400">↑ 18%</p>
+            <p class="text-gray-500 text-xs">vs last quarter</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-1">Avg. Salary (Senior Dev)</p>
+            <p class="text-2xl font-bold text-purple-400">$142k</p>
+            <p class="text-gray-500 text-xs">US Market 2026</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-1">AI/ML Roles</p>
+            <p class="text-2xl font-bold text-blue-400">↑ 34%</p>
+            <p class="text-gray-500 text-xs">YoY growth</p>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <p class="text-gray-400 text-sm mb-1">Remote Jobs</p>
+            <p class="text-2xl font-bold text-yellow-400">62%</p>
+            <p class="text-gray-500 text-xs">Of all tech roles</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Top Demanded Skills 2026</h3>
+            <canvas id="barChart" height="220"></canvas>
+        </div>
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Salary Ranges by Role</h3>
+            <div class="space-y-4">
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>ML Engineer</span><span class="text-green-400">$130k–$200k</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-green-500 rounded-full" style="width:90%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>Backend Engineer</span><span class="text-purple-400">$110k–$170k</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-purple-500 rounded-full" style="width:75%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>DevOps Engineer</span><span class="text-blue-400">$105k–$160k</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-blue-500 rounded-full" style="width:70%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>Frontend Developer</span><span class="text-yellow-400">$90k–$140k</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-yellow-500 rounded-full" style="width:60%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>Data Analyst</span><span class="text-red-400">$80k–$120k</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-red-500 rounded-full" style="width:50%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+        labels: ['Python','JavaScript','React','AWS','Docker','Kubernetes','SQL','TypeScript'],
+        datasets: [{
+            label: 'Demand Score',
+            data: [92, 88, 82, 79, 75, 68, 85, 72],
+            backgroundColor: ['#a78bfa','#60a5fa','#34d399','#f59e0b','#f87171','#6ee7b7','#c084fc','#38bdf8'],
+            borderRadius: 8
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { display: false } },
+            y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+    }
+});
+</script>
+</body>
+</html>

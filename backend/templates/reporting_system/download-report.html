@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Download Report - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
+    <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
+    <a href="/results"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📋 Results</a>
+    <a href="/candidates"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">👥 Candidates</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🕐 History</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold">Download Reports</h1>
+        <p class="text-gray-400 mt-1">Export candidate data and screening reports</p>
+    </div>
+
+    <!-- REPORT TYPES -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 hover:border-purple-500/40 transition-all">
+            <div class="text-4xl mb-4">📋</div>
+            <h3 class="font-bold text-lg mb-2">Full Screening Report</h3>
+            <p class="text-gray-400 text-sm mb-4">Complete AI analysis for all screened candidates including scores, strengths, and recommendations.</p>
+            <button onclick="downloadReport('full')" class="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-xl font-bold transition-all text-sm">
+                Download PDF
+            </button>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 hover:border-blue-500/40 transition-all">
+            <div class="text-4xl mb-4">📊</div>
+            <h3 class="font-bold text-lg mb-2">Analytics Summary</h3>
+            <p class="text-gray-400 text-sm mb-4">Pipeline statistics, skill distribution charts, and hiring trend data exported as CSV.</p>
+            <button onclick="downloadReport('analytics')" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-xl font-bold transition-all text-sm">
+                Download CSV
+            </button>
+        </div>
+        <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 hover:border-green-500/40 transition-all">
+            <div class="text-4xl mb-4">👥</div>
+            <h3 class="font-bold text-lg mb-2">Candidate List</h3>
+            <p class="text-gray-400 text-sm mb-4">All candidates with contact info, scores, and current status exported as spreadsheet.</p>
+            <button onclick="downloadReport('candidates')" class="w-full bg-green-600 hover:bg-green-700 py-2 rounded-xl font-bold transition-all text-sm">
+                Download Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- RECENT REPORTS -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-800">
+            <h3 class="font-bold text-lg">Recent Reports</h3>
+        </div>
+        <div class="divide-y divide-gray-800">
+            <div class="px-6 py-4 flex justify-between items-center hover:bg-white/5 transition-all">
+                <div>
+                    <p class="font-bold">Full Screening Report — May 2026</p>
+                    <p class="text-gray-400 text-sm">Generated 2 hours ago • 42 candidates</p>
+                </div>
+                <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl text-sm font-bold">📥 Download</button>
+            </div>
+            <div class="px-6 py-4 flex justify-between items-center hover:bg-white/5 transition-all">
+                <div>
+                    <p class="font-bold">Analytics Summary — Week 20</p>
+                    <p class="text-gray-400 text-sm">Generated yesterday • CSV format</p>
+                </div>
+                <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl text-sm font-bold">📥 Download</button>
+            </div>
+            <div class="px-6 py-4 flex justify-between items-center hover:bg-white/5 transition-all">
+                <div>
+                    <p class="font-bold">Candidate List Export — April 2026</p>
+                    <p class="text-gray-400 text-sm">Generated 3 days ago • 318 candidates</p>
+                </div>
+                <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl text-sm font-bold">📥 Download</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUCCESS TOAST -->
+    <div id="toast" class="hidden fixed bottom-8 right-8 bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg">
+        ✅ Report download started!
+    </div>
+</main>
+
+<script>
+function downloadReport(type) {
+    const toast = document.getElementById('toast');
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
+}
+</script>
+</body>
+</html>

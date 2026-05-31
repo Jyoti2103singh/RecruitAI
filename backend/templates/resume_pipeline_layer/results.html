@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>AI Screening Result - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-950 text-white min-h-screen">
+
+<!-- NAV -->
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/upload"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
+    <a href="/screening"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
+    <a href="/results"           class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-purple-500/20 border-l-4 border-purple-400 mb-1">📋 Results</a>
+    <a href="/candidates"        class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">👥 Candidates</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/history"           class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🕐 History</a>
+    <a href="/analytics"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/logout"            class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<!-- MAIN -->
+<main class="ml-[220px] p-8">
+
+    <!-- HEADER -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold">AI Screening Result</h1>
+            <p class="text-gray-400 mt-1">Individual candidate analysis report</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/upload" class="border border-gray-700 hover:bg-gray-800 px-5 py-2 rounded-xl font-bold transition-all text-sm">
+                ← Upload Another
+            </a>
+            <a href="/results" class="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded-xl font-bold transition-all text-sm">
+                All Results
+            </a>
+        </div>
+    </div>
+
+    {% if results and results|length > 0 %}
+    <div class="space-y-6">
+        {% for r in results %}
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 hover:border-purple-500/30 transition-all overflow-hidden">
+
+            <!-- TOP BANNER -->
+            <div class="bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-b border-gray-800 px-6 py-4 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-green-400">{{ r.overall_verdict }}</h2>
+                <div class="flex gap-2">
+                    <a href="/ai-interviewer" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                        🎤 Schedule Interview
+                    </a>
+                    <form method="POST" action="/generate-report" class="inline">
+                        <input type="hidden" name="candidate_id" value="{{ r.candidate_id or '' }}">
+                        <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                            📥 Download Report
+                        </button>
+                    </form>
+                    <a href="/compare-candidates" class="border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                        ⚖️ Compare
+                    </a>
+                </div>
+            </div>
+
+            <!-- SUMMARY -->
+            <div class="px-6 py-4 border-b border-gray-800">
+                <p class="text-gray-300 leading-relaxed">{{ r.final_summary }}</p>
+            </div>
+
+            <!-- DETAILS GRID -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-800">
+
+                <!-- Strengths -->
+                <div class="p-6">
+                    <h3 class="text-sm font-bold text-green-400 mb-3 flex items-center gap-2">
+                        ✅ Strengths
+                    </h3>
+                    <ul class="space-y-2">
+                        {% for s in r.strengths %}
+                        <li class="text-sm text-gray-300 flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">•</span> {{ s }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <!-- Weaknesses -->
+                <div class="p-6">
+                    <h3 class="text-sm font-bold text-red-400 mb-3 flex items-center gap-2">
+                        ❌ Weaknesses
+                    </h3>
+                    <ul class="space-y-2">
+                        {% for w in r.weaknesses %}
+                        <li class="text-sm text-gray-300 flex items-start gap-2">
+                            <span class="text-red-400 mt-0.5">•</span> {{ w }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="p-6">
+                    <h3 class="text-sm font-bold text-yellow-400 mb-3 flex items-center gap-2">
+                        💡 Recommendations
+                    </h3>
+                    <ul class="space-y-2">
+                        {% for rec in r.recommendations %}
+                        <li class="text-sm text-gray-300 flex items-start gap-2">
+                            <span class="text-yellow-400 mt-0.5">•</span> {{ rec }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <!-- EMPTY STATE -->
+    <div class="text-center py-24 bg-gray-900 rounded-2xl border border-gray-800">
+        <p class="text-6xl mb-4">📋</p>
+        <h2 class="text-xl font-bold text-gray-300 mb-2">No result found</h2>
+        <p class="text-gray-500 mb-6">Upload a resume to generate an AI screening result</p>
+        <a href="/upload" class="bg-purple-600 hover:bg-purple-700 px-8 py-3 rounded-xl font-bold transition-all">
+            Upload Resume
+        </a>
+    </div>
+    {% endif %}
+
+</main>
+</body>
+</html>

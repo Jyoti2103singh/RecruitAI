@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login | AIScreen</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+  :root {
+    --bg: #0d0f14; --surface: #151820; --surface2: #1c2030;
+    --border: #252a38; --accent: #4fffb0; --accent2: #7c6fff;
+    --text: #e8eaf0; --muted: #6b7280;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background-image: radial-gradient(ellipse at 20% 50%, rgba(79,255,176,0.05) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 20%, rgba(124,111,255,0.05) 0%, transparent 60%);
+  }
+  .container { width: 100%; max-width: 420px; padding: 20px; }
+  .logo { text-align: center; margin-bottom: 32px; }
+  .logo h1 { font-size: 36px; font-weight: 800; letter-spacing: -1px; color: var(--accent); }
+  .logo h1 span { color: var(--text); }
+  .logo p { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; margin-top: 4px; }
+
+  /* Role Toggle */
+  .role-toggle {
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 4px; margin-bottom: 24px; gap: 4px;
+  }
+  .role-btn {
+    padding: 12px; border-radius: 8px; border: none;
+    background: transparent; color: var(--muted);
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; display: flex;
+    align-items: center; justify-content: center; gap: 8px;
+  }
+  .role-btn.active {
+    background: var(--surface2); color: var(--text);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .role-btn.active.recruiter { color: var(--accent); }
+  .role-btn.active.jobseeker { color: var(--accent2); }
+  .role-icon { font-size: 18px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px;
+  }
+  .card-title {
+    font-size: 20px; font-weight: 800; margin-bottom: 24px;
+    letter-spacing: -0.5px;
+  }
+  .recruiter-mode .card-title { color: var(--accent); }
+  .jobseeker-mode .card-title { color: var(--accent2); }
+
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-family: 'DM Mono', monospace; margin-bottom: 6px; }
+  input {
+    width: 100%; padding: 12px 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 14px;
+    outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: rgba(79,255,176,0.4); }
+  .jobseeker-mode input:focus { border-color: rgba(124,111,255,0.4); }
+
+  .btn {
+    width: 100%; padding: 14px;
+    border: none; border-radius: 8px;
+    font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; margin-top: 8px;
+  }
+  .btn-recruiter { background: var(--accent); color: #0d0f14; }
+  .btn-recruiter:hover { background: #3de89a; transform: translateY(-1px); }
+  .btn-jobseeker { background: var(--accent2); color: #fff; }
+  .btn-jobseeker:hover { background: #6a5ee0; transform: translateY(-1px); }
+
+  .alert {
+    padding: 12px 14px; border-radius: 8px; font-size: 13px;
+    margin-bottom: 16px; font-family: 'DM Mono', monospace;
+  }
+  .alert-error { background: rgba(255,107,107,0.1); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.2); }
+  .alert-success { background: rgba(79,255,176,0.1); color: var(--accent); border: 1px solid rgba(79,255,176,0.2); }
+
+  .footer-link { text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted); }
+  .footer-link a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .jobseeker-mode .footer-link a { color: var(--accent2); }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <h1>AI<span>Screen</span></h1>
+    <p>Intelligent Resume Screening System</p>
+  </div>
+
+  <!-- Role Toggle -->
+  <div class="role-toggle">
+    <button class="role-btn active recruiter" onclick="setRole('recruiter')">
+      <span class="role-icon">💼</span> Recruiter
+    </button>
+    <button class="role-btn jobseeker" onclick="setRole('jobseeker')">
+      <span class="role-icon">🎓</span> Job Seeker
+    </button>
+  </div>
+
+  <div class="card recruiter-mode" id="login-card">
+    <div class="card-title" id="card-title">Recruiter Login</div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="POST" action="/login">
+      <input type="hidden" name="role" id="role-input" value="recruiter">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Enter username" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter password" required>
+      </div>
+      <button type="submit" class="btn btn-recruiter" id="login-btn">Login as Recruiter</button>
+    </form>
+
+    <div class="footer-link">
+      Don't have an account? <a href="/signup">Sign up</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function setRole(role) {
+    const card = document.getElementById('login-card');
+    const title = document.getElementById('card-title');
+    const btn = document.getElementById('login-btn');
+    const roleInput = document.getElementById('role-input');
+    const btns = document.querySelectorAll('.role-btn');
+
+    btns.forEach(b => b.classList.remove('active'));
+    document.querySelector('.' + role).classList.add('active');
+
+    roleInput.value = role;
+
+    if (role === 'recruiter') {
+      card.className = 'card recruiter-mode';
+      title.textContent = 'Recruiter Login';
+      btn.className = 'btn btn-recruiter';
+      btn.textContent = 'Login as Recruiter';
+    } else {
+      card.className = 'card jobseeker-mode';
+      title.textContent = 'Job Seeker Login';
+      btn.className = 'btn btn-jobseeker';
+      btn.textContent = 'Login as Job Seeker';
+    }
+  }
+
+  // Auto-select role if passed via URL param
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('role') === 'jobseeker') setRole('jobseeker');
+</script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Candidate Profile - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
+    <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
+    <a href="/results"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📋 Results</a>
+    <a href="/candidates"         class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-purple-500/20 border-l-4 border-purple-400 mb-1">👥 Candidates</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🕐 History</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="flex items-center gap-4 mb-8">
+        <a href="/candidates" class="text-gray-400 hover:text-white text-sm">← Back to Candidates</a>
+    </div>
+
+    {% if candidate %}
+
+    <!-- PROFILE HEADER -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6 mb-6 flex items-center gap-6">
+        <div class="w-20 h-20 rounded-full bg-purple-500/30 flex items-center justify-center text-3xl">
+            👤
+        </div>
+        <div class="flex-1">
+            <h1 class="text-2xl font-bold">{{ candidate.name or "Unknown" }}</h1>
+            <p class="text-gray-400">{{ candidate.status or "Candidate" }}</p>
+            <p class="text-gray-500 text-sm mt-1">{{ candidate.email or "N/A" }}</p>
+            {% if candidate.phone %}
+            <p class="text-gray-500 text-sm">{{ candidate.phone }}</p>
+            {% endif %}
+        </div>
+        <div class="flex gap-3">
+            <a href="/ai-interviewer" class="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded-xl font-bold text-sm transition-all">
+                🎤 Schedule Interview
+            </a>
+            <a href="/screening" class="border border-gray-700 hover:bg-gray-800 px-5 py-2 rounded-xl font-bold text-sm transition-all">
+                🔍 Re-Screen
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- SCORES -->
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Scores</h3>
+            <div class="space-y-4">
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-400">ATS Score</span>
+                        <span class="text-purple-400 font-bold">{{ candidate.score or 0 }}%</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-purple-500 rounded-full" style="width:{{ candidate.score or 0 }}%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-400">Technical</span>
+                        <span class="text-blue-400 font-bold">{{ [candidate.score - 3, 0] | max }}%</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-blue-500 rounded-full" style="width:{{ [candidate.score - 3, 0] | max }}%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-400">Overall Fit</span>
+                        <span class="text-green-400 font-bold">{{ [candidate.score - 6, 0] | max }}%</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-800 rounded-full">
+                        <div class="h-full bg-green-500 rounded-full" style="width:{{ [candidate.score - 6, 0] | max }}%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-800 text-center">
+                <p class="text-gray-400 text-sm mb-2">Decision</p>
+                <span class="px-4 py-1 rounded-full font-bold inline-block
+                    {% if candidate.status == 'hired' %}bg-green-500/20 text-green-400
+                    {% elif candidate.status == 'shortlisted' %}bg-yellow-500/20 text-yellow-400
+                    {% elif candidate.status == 'rejected' %}bg-red-500/20 text-red-400
+                    {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                    {{ candidate.status | upper or "PENDING" }}
+                </span>
+            </div>
+        </div>
+
+        <!-- SKILLS -->
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Skills</h3>
+            {% if candidate.skills %}
+            <div class="flex flex-wrap gap-2">
+                {% for skill in candidate.skills %}
+                <span class="bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full text-sm border border-purple-500/20">
+                    {{ skill }}
+                </span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-sm italic">No skills data available.</p>
+            {% endif %}
+
+            <h4 class="font-bold mt-6 mb-2 text-sm text-gray-400">Contact Info</h4>
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2 text-gray-300">
+                    <span>📧</span>
+                    <span>{{ candidate.email or "N/A" }}</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-300">
+                    <span>📞</span>
+                    <span>{{ candidate.phone or "N/A" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- DETAILS -->
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Details</h3>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Candidate ID</span>
+                    <span>#{{ candidate.id }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Resume ID</span>
+                    <span>{{ candidate.resume_id or "N/A" }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">ATS Score</span>
+                    <span class="text-purple-400 font-bold">{{ candidate.score or 0 }}%</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Status</span>
+                    <span class="
+                        {% if candidate.status == 'hired' %}text-green-400
+                        {% elif candidate.status == 'shortlisted' %}text-yellow-400
+                        {% elif candidate.status == 'rejected' %}text-red-400
+                        {% else %}text-gray-400{% endif %}">
+                        {{ candidate.status | capitalize or "Pending" }}
+                    </span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Added On</span>
+                    <span>{{ candidate.created_at or "N/A" }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Last Updated</span>
+                    <span>{{ candidate.updated_at or "N/A" }}</span>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-800 space-y-2">
+                <a href="/ai-interviewer" class="block w-full text-center bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 py-2 rounded-xl text-sm font-bold border border-purple-500/20 transition-all">
+                    🎤 Generate Interview Questions
+                </a>
+                <a href="/compare-candidates" class="block w-full text-center bg-gray-800 hover:bg-gray-700 py-2 rounded-xl text-sm font-bold transition-all">
+                    ⚖️ Add to Comparison
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTES / AI INSIGHT -->
+    <div class="mt-6 bg-gray-900 rounded-2xl border border-gray-800 p-6">
+        <h3 class="font-bold text-lg mb-3">📝 Notes & AI Insight</h3>
+        <p class="text-gray-300 leading-relaxed">
+            {{ candidate.notes or "No notes available for this candidate yet. Run AI screening to generate insights." }}
+        </p>
+    </div>
+
+    {% else %}
+    <!-- NO CANDIDATE FOUND -->
+    <div class="bg-gray-900 rounded-2xl border border-red-500/20 p-12 text-center">
+        <p class="text-5xl mb-4">🔍</p>
+        <h2 class="text-2xl font-bold mb-2">Candidate Not Found</h2>
+        <p class="text-gray-400 mb-6">No candidate exists with this ID.</p>
+        <a href="/candidates" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-xl font-bold transition-all">
+            ← Back to Candidates
+        </a>
+    </div>
+    {% endif %}
+
+</main>
+</body>
+</html>

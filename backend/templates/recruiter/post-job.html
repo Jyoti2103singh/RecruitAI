@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Post a Job | AIScreen</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #1a1a24;
+    --border: rgba(255,255,255,0.07);
+    --purple: #7c5cbf;
+    --purple-bright: #9b7de8;
+    --purple-glow: rgba(124,92,191,0.25);
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --success: #4ade80;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; display: flex; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 220px; min-height: 100vh; background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 24px 0; position: fixed; left: 0; top: 0; bottom: 0;
+  }
+  .logo { padding: 0 20px 28px; font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; color: var(--purple-bright); letter-spacing: -0.5px; }
+  .logo span { color: var(--text); }
+  .nav-section { padding: 0 12px; margin-bottom: 8px; }
+  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); padding: 0 8px; margin-bottom: 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--muted); font-size: 13.5px; text-decoration: none; transition: all 0.2s; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--purple-glow); color: var(--purple-bright); }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar-bottom { margin-top: auto; padding: 0 12px; }
+  .logout-btn { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--danger); font-size: 13.5px; text-decoration: none; transition: all 0.2s; width: 100%; background: none; border: none; cursor: pointer; font-family: inherit; }
+  .logout-btn:hover { background: rgba(248,113,113,0.08); }
+
+  /* MAIN */
+  .main { margin-left: 220px; flex: 1; padding: 40px; max-width: 900px; }
+  .page-header { margin-bottom: 36px; }
+  .page-header h1 { font-family: 'Space Mono', monospace; font-size: 26px; font-weight: 700; color: var(--text); }
+  .page-header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+
+  /* FORM CARD */
+  .form-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 36px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .form-group { display: flex; flex-direction: column; gap: 8px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 12.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  .form-group input, .form-group textarea, .form-group select {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif;
+    transition: border-color 0.2s, box-shadow 0.2s; outline: none; resize: none;
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+    border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-glow);
+  }
+  .form-group input::placeholder, .form-group textarea::placeholder { color: var(--muted); }
+  .form-group select option { background: var(--bg3); }
+  textarea { min-height: 130px; }
+
+  /* SKILLS INPUT */
+  .skills-input-wrap { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; cursor: text; transition: border-color 0.2s, box-shadow 0.2s; }
+  .skills-input-wrap:focus-within { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-glow); }
+  .skill-tag { background: var(--purple-glow); border: 1px solid var(--purple); color: var(--purple-bright); padding: 4px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .skill-tag button { background: none; border: none; color: var(--purple-bright); cursor: pointer; font-size: 12px; padding: 0; line-height: 1; opacity: 0.7; }
+  .skill-tag button:hover { opacity: 1; }
+  .skills-input-wrap input { background: none; border: none; outline: none; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; min-width: 120px; flex: 1; padding: 2px 4px; }
+  .skills-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* SCORE RANGE */
+  .score-range-wrap { display: flex; align-items: center; gap: 16px; }
+  .score-range-wrap input[type="range"] { flex: 1; accent-color: var(--purple); }
+  .score-val { background: var(--purple-glow); border: 1px solid var(--purple); color: var(--purple-bright); padding: 4px 12px; border-radius: 20px; font-size: 13px; font-family: 'Space Mono', monospace; min-width: 52px; text-align: center; }
+
+  /* DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
+  /* SUBMIT */
+  .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+  .btn { padding: 12px 28px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--purple); color: var(--purple-bright); }
+  .btn-primary { background: var(--purple); color: #fff; }
+  .btn-primary:hover { background: var(--purple-bright); transform: translateY(-1px); box-shadow: 0 4px 16px var(--purple-glow); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 32px; right: 32px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 22px; display: flex; align-items: center; gap: 12px; font-size: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transform: translateY(80px); opacity: 0; transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1); z-index: 999; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: rgba(74,222,128,0.3); }
+  .toast.success i { color: var(--success); }
+  .toast.error { border-color: rgba(248,113,113,0.3); }
+  .toast.error i { color: var(--danger); }
+
+  /* POSTED JOBS */
+  .section-title { font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; margin-bottom: 16px; margin-top: 40px; display: flex; align-items: center; gap: 10px; }
+  .badge { background: var(--purple-glow); color: var(--purple-bright); font-size: 11px; padding: 3px 10px; border-radius: 20px; font-family: 'DM Sans', sans-serif; font-weight: 600; }
+  .job-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; display: flex; align-items: center; gap: 16px; transition: border-color 0.2s; }
+  .job-card:hover { border-color: var(--purple); }
+  .job-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--purple-glow); display: flex; align-items: center; justify-content: center; color: var(--purple-bright); font-size: 18px; flex-shrink: 0; }
+  .job-info { flex: 1; }
+  .job-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .job-meta { font-size: 12.5px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+  .job-meta span { display: flex; align-items: center; gap: 5px; }
+  .job-skills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .job-skill { background: var(--bg3); border: 1px solid var(--border); color: var(--muted); padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+  .job-actions { display: flex; gap: 8px; }
+  .btn-sm { padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .btn-toggle { background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); color: var(--success); }
+  .btn-toggle.inactive { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); color: var(--danger); }
+  .btn-del { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2); color: var(--danger); }
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
+  .empty-state i { font-size: 36px; margin-bottom: 12px; display: block; opacity: 0.3; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">AI<span>Screen</span></div>
+
+  <div class="nav-section">
+    <div class="nav-label">Main</div>
+    <a href="/dashboard" class="nav-item"><i class="fas fa-th-large"></i> Dashboard</a>
+    <a href="/screen" class="nav-item"><i class="fas fa-upload"></i> Screen Resume</a>
+    <a href="/candidates" class="nav-item"><i class="fas fa-users"></i> Candidates</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Tools</div>
+    <a href="/ai-interviewer" class="nav-item"><i class="fas fa-robot"></i> AI Interviewer</a>
+    <a href="/compare" class="nav-item"><i class="fas fa-chart-bar"></i> Compare</a>
+    <a href="/analytics" class="nav-item"><i class="fas fa-chart-pie"></i> Analytics</a>
+    <a href="/history" class="nav-item"><i class="fas fa-history"></i> History</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Jobs</div>
+    <a href="/recruiter/post-job" class="nav-item active"><i class="fas fa-briefcase"></i> Post a Job</a>
+    <a href="/recruiter/applications" class="nav-item"><i class="fas fa-inbox"></i> Applications</a>
+  </div>
+
+  <div class="sidebar-bottom">
+    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="page-header">
+    <h1>Post a Job</h1>
+    <p>Create a job listing that jobseekers can browse and apply to</p>
+  </div>
+
+  <div class="form-card">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Job Title *</label>
+        <input type="text" id="jobTitle" placeholder="e.g. Senior Python Developer" required/>
+      </div>
+      <div class="form-group">
+        <label>Company Name</label>
+        <input type="text" id="company" placeholder="e.g. Acme Corp"/>
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" id="location" placeholder="e.g. Mumbai / Remote"/>
+      </div>
+      <div class="form-group">
+        <label>Job Type</label>
+        <select id="jobType">
+          <option value="Full-time">Full-time</option>
+          <option value="Part-time">Part-time</option>
+          <option value="Contract">Contract</option>
+          <option value="Internship">Internship</option>
+          <option value="Freelance">Freelance</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Salary Range</label>
+        <input type="text" id="salary" placeholder="e.g. ₹8–12 LPA or $60k–80k"/>
+      </div>
+      <div class="form-group">
+        <label>Experience Required</label>
+        <input type="text" id="experience" placeholder="e.g. 2–4 years"/>
+      </div>
+      <div class="form-group full">
+        <label>Job Description *</label>
+        <textarea id="description" placeholder="Describe the role, responsibilities, what you're looking for..."></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Required Skills</label>
+        <div class="skills-input-wrap" id="skillsWrap">
+          <input type="text" id="skillInput" placeholder="Type a skill and press Enter…"/>
+        </div>
+        <div class="skills-hint">Press Enter or comma to add each skill</div>
+      </div>
+      <div class="form-group full">
+        <label>Minimum ATS Score to Auto-Filter</label>
+        <div class="score-range-wrap">
+          <input type="range" id="minScore" min="0" max="100" value="50" oninput="document.getElementById('scoreVal').textContent=this.value"/>
+          <div class="score-val" id="scoreVal">50</div>
+        </div>
+        <div class="skills-hint">Applicants below this score will be auto-marked as low-match</div>
+      </div>
+    </div>
+    <hr class="divider"/>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="resetForm()">Clear</button>
+      <button class="btn btn-primary" id="postBtn" onclick="postJob()">
+        <i class="fas fa-plus"></i> Post Job
+      </button>
+    </div>
+  </div>
+
+  <!-- POSTED JOBS LIST -->
+  <div class="section-title">Your Job Listings <span class="badge" id="jobCount">0</span></div>
+  <div id="jobsList"><div class="empty-state"><i class="fas fa-briefcase"></i>No jobs posted yet</div></div>
+</main>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><i class="fas fa-check-circle"></i> <span id="toastMsg"></span></div>
+
+<script>
+  const skills = [];
+
+  // Skill tag input
+  const skillInput = document.getElementById('skillInput');
+  skillInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = skillInput.value.trim().replace(',','');
+      if (val && !skills.includes(val)) {
+        skills.push(val);
+        renderSkillTags();
+      }
+      skillInput.value = '';
+    }
+  });
+
+  function renderSkillTags() {
+    const wrap = document.getElementById('skillsWrap');
+    wrap.querySelectorAll('.skill-tag').forEach(t => t.remove());
+    skills.forEach((s, i) => {
+      const tag = document.createElement('div');
+      tag.className = 'skill-tag';
+      tag.innerHTML = `${s}<button onclick="removeSkill(${i})">×</button>`;
+      wrap.insertBefore(tag, skillInput);
+    });
+  }
+
+  function removeSkill(i) { skills.splice(i, 1); renderSkillTags(); }
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    t.className = `toast ${type} show`;
+    t.querySelector('i').className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  async function postJob() {
+    const title = document.getElementById('jobTitle').value.trim();
+    const desc = document.getElementById('description').value.trim();
+    if (!title) { showToast('Job title is required', 'error'); return; }
+    if (!desc) { showToast('Job description is required', 'error'); return; }
+
+    const btn = document.getElementById('postBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting…';
+
+    const payload = {
+      title, description: desc,
+      company: document.getElementById('company').value.trim(),
+      location: document.getElementById('location').value.trim(),
+      job_type: document.getElementById('jobType').value,
+      salary: document.getElementById('salary').value.trim(),
+      experience: document.getElementById('experience').value.trim(),
+      skills: skills,
+      min_score: parseInt(document.getElementById('minScore').value)
+    };
+
+    try {
+      const res = await fetch('/api/jobs/post', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Job posted successfully!');
+        resetForm();
+        loadJobs();
+      } else {
+        showToast(data.error || 'Failed to post job', 'error');
+      }
+    } catch(e) {
+      showToast('Network error', 'error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Post Job';
+    }
+  }
+
+  function resetForm() {
+    ['jobTitle','company','location','salary','experience','description'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('jobType').value = 'Full-time';
+    document.getElementById('minScore').value = 50;
+    document.getElementById('scoreVal').textContent = '50';
+    skills.length = 0; renderSkillTags();
+  }
+
+  async function loadJobs() {
+    try {
+      const res = await fetch('/api/jobs/mine');
+      const jobs = await res.json();
+      document.getElementById('jobCount').textContent = jobs.length;
+      const list = document.getElementById('jobsList');
+      if (!jobs.length) { list.innerHTML = '<div class="empty-state"><i class="fas fa-briefcase"></i>No jobs posted yet</div>'; return; }
+      list.innerHTML = jobs.map(j => `
+        <div class="job-card" id="job-${j.id}">
+          <div class="job-icon"><i class="fas fa-briefcase"></i></div>
+          <div class="job-info">
+            <div class="job-title">${j.title}</div>
+            <div class="job-meta">
+              ${j.company ? `<span><i class="fas fa-building"></i>${j.company}</span>` : ''}
+              ${j.location ? `<span><i class="fas fa-map-marker-alt"></i>${j.location}</span>` : ''}
+              ${j.job_type ? `<span><i class="fas fa-clock"></i>${j.job_type}</span>` : ''}
+              ${j.salary ? `<span><i class="fas fa-rupee-sign"></i>${j.salary}</span>` : ''}
+              <span><i class="fas fa-users"></i>${j.applicant_count || 0} applicants</span>
+            </div>
+            ${j.skills_list && j.skills_list.length ? `<div class="job-skills">${j.skills_list.slice(0,5).map(s=>`<span class="job-skill">${s}</span>`).join('')}${j.skills_list.length>5?`<span class="job-skill">+${j.skills_list.length-5}</span>`:''}</div>` : ''}
+          </div>
+          <div class="job-actions">
+            <button class="btn-sm btn-toggle ${j.is_active?'':'inactive'}" onclick="toggleJob(${j.id}, ${j.is_active})">
+              ${j.is_active ? '<i class="fas fa-eye"></i> Active' : '<i class="fas fa-eye-slash"></i> Paused'}
+            </button>
+            <button class="btn-sm btn-del" onclick="deleteJob(${j.id})"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      `).join('');
+    } catch(e) { console.error(e); }
+  }
+
+  async function toggleJob(id, current) {
+    await fetch(`/api/jobs/${id}/toggle`, { method: 'POST' });
+    loadJobs();
+  }
+
+  async function deleteJob(id) {
+    if (!confirm('Delete this job listing?')) return;
+    await fetch(`/api/jobs/${id}/delete`, { method: 'POST' });
+    loadJobs();
+  }
+
+  loadJobs();
+</script>
+</body>
+</html>

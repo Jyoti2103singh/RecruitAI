@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lumina AI | Resume Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#ff516a",
+                        "secondary-container": "#03b5d3",
+                        "secondary-fixed": "#acedff",
+                        "tertiary-fixed": "#ffdadb",
+                        "surface-container-low": "#1b1b23",
+                        "on-primary-fixed-variant": "#2f2ebe",
+                        "outline": "#908fa0",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "surface-container": "#1f1f27",
+                        "secondary": "#4cd7f6",
+                        "error-container": "#93000a",
+                        "on-primary-fixed": "#07006c",
+                        "primary": "#c0c1ff",
+                        "on-secondary-container": "#00424e",
+                        "on-error": "#690005",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary": "#003640",
+                        "surface-dim": "#13131b",
+                        "on-tertiary-container": "#5b0017",
+                        "on-tertiary": "#67001b",
+                        "primary-fixed-dim": "#c0c1ff",
+                        "on-background": "#e4e1ed",
+                        "primary-container": "#8083ff",
+                        "surface": "#13131b",
+                        "on-tertiary-fixed": "#40000d",
+                        "on-surface-variant": "#c7c4d7",
+                        "primary-fixed": "#e1e0ff",
+                        "surface-tint": "#c0c1ff",
+                        "inverse-on-surface": "#303038",
+                        "surface-container-lowest": "#0d0d15",
+                        "on-surface": "#e4e1ed",
+                        "surface-variant": "#34343d",
+                        "surface-bright": "#393841",
+                        "surface-container-highest": "#34343d",
+                        "tertiary": "#ffb2b7",
+                        "inverse-primary": "#494bd6",
+                        "surface-container-high": "#292932",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "on-secondary-fixed": "#001f26",
+                        "error": "#ffb4ab",
+                        "secondary-fixed-dim": "#4cd7f6",
+                        "inverse-surface": "#e4e1ed",
+                        "on-primary-container": "#0d0096",
+                        "on-primary": "#1000a9",
+                        "background": "#13131b",
+                        "outline-variant": "#464554",
+                        "on-secondary-fixed-variant": "#004e5c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "sm": "12px",
+                        "xl": "64px",
+                        "xs": "4px",
+                        "base": "8px",
+                        "margin": "32px",
+                        "md": "24px",
+                        "lg": "40px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Sora"],
+                        "label-md": ["Inter"],
+                        "headline-lg-mobile": ["Sora"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Sora"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Sora"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        @keyframes gradient-move {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .animate-gradient { background-size: 200% 200%; animation: gradient-move 15s ease infinite; }
+        .glass-card { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glow-border:hover { border-color: #c0c1ff; box-shadow: 0 0 20px rgba(192, 193, 255, 0.3); }
+        .reveal { opacity: 0; transform: translateY(20px); transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+        .reveal.active { opacity: 1; transform: translateY(0); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .bg-animated-page { background: linear-gradient(-45deg, #0d0d15, #1b1b23, #13131b, #1f1f27); background-size: 400% 400%; animation: gradient-move 15s ease infinite; }
+        #chat-widget:hover #chat-window { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        body { min-height: max(884px, 100dvh); }
+    </style>
+</head>
+<body class="bg-animated-page text-on-background selection:bg-primary selection:text-on-primary">
+
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-[0_8px_32px_rgba(192,193,255,0.15)]">
+<nav class="flex justify-between items-center px-gutter py-4 w-full max-w-full">
+<div class="flex items-center gap-base">
+<span class="material-symbols-outlined text-primary">clinical_notes</span>
+<span class="font-display-lg text-headline-md font-bold text-primary tracking-tight">Lumina AI</span>
+</div>
+<div class="hidden md:flex items-center gap-lg">
+<a class="text-primary font-bold transition-colors" href="#">Platform</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Solutions</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Resources</a>
+</div>
+<!-- FIXED -->
+<a href="/login" class="bg-primary-container text-on-primary-container px-md py-base rounded-full font-label-md text-label-md active:scale-95 duration-200 transition-all hover:brightness-110 shadow-lg shadow-primary/20">
+    Get Started
+</a>
+</nav>
+</header>
+
+<main class="pt-24">
+<!-- Hero Section -->
+<section class="relative min-h-[795px] flex items-center justify-center overflow-hidden px-gutter">
+<div class="absolute top-1/4 -left-20 w-96 h-96 bg-primary/20 rounded-full blur-[120px] animate-pulse"></div>
+<div class="absolute bottom-1/4 -right-20 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[120px] animate-pulse" style="animation-delay:2s"></div>
+<div class="max-w-5xl w-full text-center reveal">
+<div class="inline-flex items-center gap-2 px-4 py-1 rounded-full border border-primary/30 bg-primary/5 mb-lg">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span class="font-label-md text-label-md text-primary tracking-widest uppercase">Next-Gen HR Intelligence</span>
+</div>
+<h1 class="font-display-lg text-display-lg mb-md leading-tight">
+    Resume Intelligence <br/>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-tertiary">Beyond Keywords.</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-xl">
+    Lumina AI decodes professional narratives, identifying top 1% talent with surgical precision. Transform your recruitment from screening to strategic selection.
+</p>
+<div class="flex flex-col md:flex-row items-center justify-center gap-md">
+<!-- FIXED -->
+<a href="/login" class="w-full md:w-auto px-lg py-md bg-primary text-on-primary rounded-xl font-bold flex items-center justify-center gap-base transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(192,193,255,0.4)]">
+<span class="material-symbols-outlined">upload</span>
+    Upload Resume
+</a>
+<button class="w-full md:w-auto px-lg py-md glass-card rounded-xl text-on-surface font-semibold flex items-center justify-center gap-base hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined">play_circle</span>
+    See Demo
+</button>
+</div>
+</div>
+</section>
+
+<!-- Stats Grid -->
+<section class="py-xl px-gutter max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<div class="reveal glass-card p-lg rounded-3xl flex flex-col justify-between min-h-[240px] hover:scale-[1.02] transition-transform">
+<div class="p-sm bg-primary/10 w-fit rounded-xl">
+<span class="material-symbols-outlined text-primary text-[32px]">monitoring</span>
+</div>
+<div>
+<h3 class="font-display-lg text-display-lg text-primary">10k+</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Resumes Scanned Daily</p>
+</div>
+</div>
+<div class="reveal glass-card p-lg rounded-3xl flex flex-col justify-between min-h-[240px] hover:scale-[1.02] transition-transform">
+<div class="p-sm bg-secondary/10 w-fit rounded-xl">
+<span class="material-symbols-outlined text-secondary text-[32px]">verified</span>
+</div>
+<div>
+<h3 class="font-display-lg text-display-lg text-secondary">99%</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Extraction Accuracy</p>
+</div>
+</div>
+<div class="reveal glass-card p-lg rounded-3xl flex flex-col justify-between min-h-[240px] hover:scale-[1.02] transition-transform">
+<div class="p-sm bg-tertiary/10 w-fit rounded-xl">
+<span class="material-symbols-outlined text-tertiary text-[32px]">bolt</span>
+</div>
+<div>
+<h3 class="font-display-lg text-display-lg text-tertiary">0.4s</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Mean Processing Time</p>
+</div>
+</div>
+</div>
+</section>
+
+<!-- Feature Spotlight -->
+<section class="py-xl px-gutter max-w-7xl mx-auto">
+<div class="flex flex-col lg:flex-row gap-xl items-center">
+<div class="lg:w-1/2 reveal">
+<h2 class="font-display-lg text-display-lg mb-md leading-tight">Human-Centric <br/> AI Analysis</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-lg">
+    Lumina doesn't just read words; it understands career trajectories, skill mastery levels, and cultural fit potential through deep semantic analysis.
+</p>
+<ul class="space-y-base">
+<li class="flex items-center gap-md text-on-surface">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<span class="font-body-md text-body-md">Advanced Skill Graph Mapping</span>
+</li>
+<li class="flex items-center gap-md text-on-surface">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<span class="font-body-md text-body-md">Bias-Free Candidate Ranking</span>
+</li>
+<li class="flex items-center gap-md text-on-surface">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<span class="font-body-md text-body-md">Direct ATS Integration</span>
+</li>
+</ul>
+</div>
+<div class="lg:w-1/2 reveal relative group">
+<div class="absolute inset-0 bg-primary/20 rounded-[40px] blur-3xl group-hover:bg-primary/30 transition-all"></div>
+<img alt="Candidate Match Interface" class="relative z-10 rounded-[40px] border border-white/10 shadow-2xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMZSR3gdBSXJ1PmcxRT_sWEbxnZ1EBuUzp89EghEnllCT2zG3Vl2dKWTOzURiQQHAk_UB6-lGpL8nv9kGJUc6g4WYSvCUcwf1BQ98yfUuuHHWfzy7j7___u9wRHDN9My_73MrT_cM3PSEQ96sq09DL0mEtFq-PfKha-Is4I8wncAkuOyyGibSQSK-cNSmuvRiufzOjX87b9TihOmqOZ82rvxTHKbGEmL0K4qjO0kXc6I5-7VxXKMchLOVZWBLXz22cL0MZysDCbag"/>
+<div class="absolute -bottom-10 -left-10 glass-card p-md rounded-2xl z-20 shadow-xl hidden md:block">
+<div class="flex items-center gap-sm">
+<div class="w-12 h-12 rounded-full bg-gradient-to-tr from-secondary to-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary">psychology</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface">Fit Score: 98%</div>
+<div class="text-[10px] text-on-surface-variant uppercase tracking-widest">Highly Compatible</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- CTA Section -->
+<section class="py-xl px-gutter">
+<div class="max-w-5xl mx-auto glass-card rounded-[48px] p-xl text-center relative overflow-hidden border-primary/20">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[80px]"></div>
+<h2 class="font-display-lg text-display-lg mb-md reveal">Ready to unlock human potential?</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-xl max-w-xl mx-auto reveal">
+    Join over 500+ forward-thinking enterprises using Lumina AI to scale their teams smarter and faster.
+</p>
+<div class="flex flex-wrap justify-center gap-md reveal">
+<!-- FIXED -->
+<a href="/login" class="px-xl py-md bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/30 hover:scale-105 transition-transform">
+    Start Free Trial
+</a>
+<button class="px-xl py-md glass-card text-on-surface rounded-xl font-semibold border-white/5 hover:bg-white/10 transition-colors">
+    Book a Demo
+</button>
+</div>
+</div>
+</section>
+</main>
+
+<!-- Footer -->
+<footer class="w-full py-md mt-auto bg-surface-container-lowest border-t border-outline-variant/20">
+<div class="flex flex-col md:flex-row justify-between items-center px-gutter gap-md">
+<div class="flex flex-col gap-xs items-center md:items-start">
+<div class="font-display-lg text-headline-md text-primary">Lumina AI</div>
+<div class="font-body-sm text-body-sm text-secondary">© 2024 Lumina AI. Human-Centric Intelligence.</div>
+</div>
+<div class="flex gap-lg">
+<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy</a>
+<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Terms</a>
+<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">API Status</a>
+</div>
+</div>
+</footer>
+
+<!-- Chat Widget -->
+<div class="fixed bottom-gutter right-gutter z-[100] group" id="chat-widget">
+<div class="absolute bottom-20 right-0 w-80 md:w-96 glass-card rounded-3xl overflow-hidden shadow-2xl opacity-0 translate-y-10 pointer-events-none transition-all duration-500 border border-primary/20" id="chat-window">
+<div class="bg-primary/20 p-md flex items-center justify-between border-b border-white/10">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-sm">smart_toy</span>
+</div>
+<div>
+<div class="text-on-surface font-semibold text-sm">Lumina Recruiter</div>
+<div class="text-[10px] text-primary flex items-center gap-1 uppercase tracking-tighter">
+<span class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>AI Online
+</div>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-white"><span class="material-symbols-outlined text-lg">close</span></button>
+</div>
+<div class="p-md space-y-md h-64 overflow-y-auto">
+<div class="flex gap-sm">
+<div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">
+    Hello! I'm Lumina's AI recruiter. How can I help you find your next superstar today?
+</div>
+</div>
+<div class="flex justify-end gap-sm">
+<div class="bg-primary p-sm rounded-2xl rounded-tr-none text-xs text-on-primary max-w-[80%]">
+    I need help analyzing 50 developer resumes for a Senior React role.
+</div>
+</div>
+</div>
+<div class="p-md border-t border-white/10 flex gap-sm">
+<input class="flex-1 bg-surface-container-lowest rounded-xl text-sm px-sm py-2 border-none outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="Type your message..." type="text"/>
+<button class="bg-primary p-2 rounded-xl text-on-primary"><span class="material-symbols-outlined">send</span></button>
+</div>
+</div>
+<button class="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_0_20px_rgba(128,131,255,0.4)] hover:shadow-[0_0_40px_rgba(128,131,255,0.6)] transition-all duration-300 relative overflow-hidden group-hover:scale-110 active:scale-90">
+<div class="absolute inset-0 bg-gradient-to-tr from-primary via-primary-container to-secondary opacity-50 group-hover:opacity-100 transition-opacity"></div>
+<span class="material-symbols-outlined text-3xl relative z-10">chat</span>
+</button>
+</div>
+
+<script>
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) entry.target.classList.add('active');
+        });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

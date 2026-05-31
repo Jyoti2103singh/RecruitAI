@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Interviewer - Lumina AI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #13131b; color: #e4e1ed; }
+  .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+  .chat-bubble-ai   { background: rgba(192,193,255,0.08); border: 1px solid rgba(192,193,255,0.15); border-radius: 0 16px 16px 16px; }
+  .chat-bubble-user { background: rgba(3,181,211,0.1);   border: 1px solid rgba(3,181,211,0.2);   border-radius: 16px 0 16px 16px; }
+  .typing-dots span { animation: blink 1.2s infinite; display:inline-block; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  #chatBox { scroll-behavior: smooth; }
+  .mode-btn.active { background: rgba(192,193,255,0.15); border-color: rgba(192,193,255,0.5); color: #c0c1ff; }
+</style>
+</head>
+<body class="min-h-screen flex">
+
+<!-- SIDEBAR -->
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-[#1b1b23] border-r border-white/10 flex flex-col py-8 px-4 z-50">
+  <h1 class="text-[#c0c1ff] font-bold text-lg mb-8" style="font-family:Sora">Lumina AI</h1>
+  <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📊 Dashboard</a>
+  <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📤 Upload Resume</a>
+  <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">🔍 AI Screening</a>
+  <a href="/results"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📋 Results</a>
+  <a href="/candidates"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">👥 Candidates</a>
+  <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">⚖️ Compare</a>
+  <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">🕐 History</a>
+  <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📈 Analytics</a>
+  <a href="/ai-interviewer"     class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-[#c0c1ff]/10 border-l-4 border-[#c0c1ff] mb-1 text-sm">🎤 Interviewer</a>
+  <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto text-sm">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8 w-full max-w-[1200px]">
+
+  <!-- HEADER -->
+  <div class="flex justify-between items-center mb-8">
+    <div>
+      <h2 class="text-2xl font-bold" style="font-family:Sora">🎤 AI Interviewer</h2>
+      <p class="text-gray-400 text-sm mt-1">Gemini AI conducts a real interview session for any candidate</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- LEFT: SETUP PANEL -->
+    <div class="lg:col-span-1 space-y-4">
+
+      <!-- CANDIDATE SELECT -->
+      <div class="glass rounded-2xl p-5">
+        <h3 class="font-bold mb-3 text-sm text-gray-400 uppercase tracking-wider">Select Candidate</h3>
+        {% if candidates %}
+        <select id="candidateSelect" onchange="updateCandidate()"
+          class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#c0c1ff]/50">
+          <option value="">— Choose a candidate —</option>
+          {% for c in candidates %}
+          <option value="{{ c.id }}"
+            data-name="{{ c.name or 'Unknown' }}"
+            data-email="{{ c.email or 'N/A' }}"
+            data-score="{{ c.score or 0 }}"
+            data-skills="{{ c.skills_json | join(', ') if c.skills_json else 'N/A' }}"
+            data-status="{{ c.status or 'pending' }}">
+            {{ c.name or 'Unknown' }} — {{ c.score or 0 }}%
+          </option>
+          {% endfor %}
+        </select>
+        {% else %}
+        <p class="text-gray-500 text-sm">No candidates yet. <a href="/upload" class="text-[#c0c1ff]">Upload a resume first.</a></p>
+        {% endif %}
+
+        <!-- CANDIDATE PREVIEW -->
+        <div id="candidatePreview" class="hidden mt-4 p-3 bg-white/5 rounded-xl">
+          <div class="flex items-center gap-3 mb-2">
+            <div id="previewAvatar" class="w-9 h-9 rounded-full bg-[#c0c1ff]/20 flex items-center justify-center font-bold text-[#c0c1ff] text-sm"></div>
+            <div>
+              <p id="previewName" class="font-semibold text-sm"></p>
+              <p id="previewEmail" class="text-gray-500 text-xs"></p>
+            </div>
+            <span id="previewScore" class="ml-auto font-bold text-[#c0c1ff] text-sm"></span>
+          </div>
+          <p class="text-gray-500 text-xs" id="previewSkills"></p>
+        </div>
+      </div>
+
+      <!-- INTERVIEW MODE -->
+      <div class="glass rounded-2xl p-5">
+        <h3 class="font-bold mb-3 text-sm text-gray-400 uppercase tracking-wider">Interview Type</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="setMode('technical')" class="mode-btn active border border-white/10 rounded-xl p-3 text-sm text-center hover:border-[#c0c1ff]/30 transition-all" data-mode="technical">
+            <div class="text-xl mb-1">💻</div>
+            <div class="font-semibold">Technical</div>
+            <div class="text-gray-500 text-xs">Coding & skills</div>
+          </button>
+          <button onclick="setMode('behavioral')" class="mode-btn border border-white/10 rounded-xl p-3 text-sm text-center hover:border-[#c0c1ff]/30 transition-all" data-mode="behavioral">
+            <div class="text-xl mb-1">🧠</div>
+            <div class="font-semibold">Behavioral</div>
+            <div class="text-gray-500 text-xs">Soft skills</div>
+          </button>
+          <button onclick="setMode('hr')" class="mode-btn border border-white/10 rounded-xl p-3 text-sm text-center hover:border-[#c0c1ff]/30 transition-all" data-mode="hr">
+            <div class="text-xl mb-1">🤝</div>
+            <div class="font-semibold">HR Round</div>
+            <div class="text-gray-500 text-xs">Culture fit</div>
+          </button>
+          <button onclick="setMode('comprehensive')" class="mode-btn border border-white/10 rounded-xl p-3 text-sm text-center hover:border-[#c0c1ff]/30 transition-all" data-mode="comprehensive">
+            <div class="text-xl mb-1">⚡</div>
+            <div class="font-semibold">Full Round</div>
+            <div class="text-gray-500 text-xs">All-in-one</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- JOB ROLE -->
+      <div class="glass rounded-2xl p-5">
+        <h3 class="font-bold mb-3 text-sm text-gray-400 uppercase tracking-wider">Job Role</h3>
+        <input id="jobRoleInput" type="text" placeholder="e.g. Senior Python Developer"
+          class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-[#c0c1ff]/50 text-sm"/>
+      </div>
+
+      <!-- START BUTTON -->
+      <button onclick="startInterview()"
+        class="w-full bg-[#c0c1ff] text-[#1000a9] py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2">
+        <span>🎤</span> Start Interview Session
+      </button>
+
+      <!-- GENERATE QUESTIONS ONLY -->
+      <button onclick="generateQuestionsOnly()"
+        class="w-full border border-[#c0c1ff]/30 text-[#c0c1ff] py-3 rounded-xl font-bold text-sm hover:bg-[#c0c1ff]/10 transition-all flex items-center justify-center gap-2">
+        <span>📋</span> Generate Questions Only
+      </button>
+
+    </div>
+
+    <!-- RIGHT: CHAT / OUTPUT PANEL -->
+    <div class="lg:col-span-2 flex flex-col gap-4">
+
+      <!-- CHAT BOX -->
+      <div class="glass rounded-2xl flex flex-col" style="height: 520px;">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-white/10">
+          <div class="relative">
+            <div class="w-8 h-8 rounded-full bg-[#c0c1ff]/20 flex items-center justify-center">🤖</div>
+            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#13131b]"></div>
+          </div>
+          <div>
+            <p class="font-semibold text-sm">Gemini AI Interviewer</p>
+            <p class="text-gray-500 text-xs" id="sessionStatus">Ready to start</p>
+          </div>
+          <button onclick="clearChat()" class="ml-auto text-gray-500 hover:text-white text-xs border border-white/10 px-3 py-1 rounded-lg hover:bg-white/5 transition-all">
+            Clear
+          </button>
+        </div>
+
+        <!-- MESSAGES -->
+        <div id="chatBox" class="flex-1 overflow-y-auto p-6 space-y-4">
+          <div class="chat-bubble-ai p-4 max-w-[85%]">
+            <p class="text-sm text-gray-300">👋 Hello! I'm your AI Interviewer powered by Gemini. Select a candidate and interview type on the left, then click <strong class="text-[#c0c1ff]">Start Interview Session</strong> to begin. I'll ask questions one by one and evaluate responses in real time.</p>
+          </div>
+        </div>
+
+        <!-- INPUT -->
+        <div class="px-6 py-4 border-t border-white/10">
+          <div class="flex gap-3">
+            <input id="userInput" type="text" placeholder="Type your response here..."
+              class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-[#c0c1ff]/50 text-sm"
+              onkeydown="if(event.key==='Enter') sendMessage()" disabled/>
+            <button onclick="sendMessage()" id="sendBtn"
+              class="bg-[#c0c1ff] text-[#1000a9] px-5 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-40"
+              disabled>Send</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVALUATION PANEL (shown after interview) -->
+      <div id="evaluationPanel" class="hidden glass rounded-2xl p-6">
+        <h3 class="font-bold mb-4 flex items-center gap-2">
+          <span>📊</span> Interview Evaluation
+          <span class="ml-auto text-xs text-gray-500">AI Generated</span>
+        </h3>
+        <div id="evaluationContent" class="text-sm text-gray-300 leading-relaxed"></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+// State
+let selectedMode = 'technical';
+let conversationHistory = [];
+let interviewActive = false;
+let questionCount = 0;
+const MAX_QUESTIONS = 5;
+
+// Candidate data from Flask
+const allCandidates = {{ (candidates or []) | tojson }};
+
+function setMode(mode) {
+  selectedMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+}
+
+function updateCandidate() {
+  const sel = document.getElementById('candidateSelect');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt.value) {
+    document.getElementById('candidatePreview').classList.add('hidden');
+    return;
+  }
+  document.getElementById('candidatePreview').classList.remove('hidden');
+  document.getElementById('previewAvatar').textContent = (opt.dataset.name || 'U')[0].toUpperCase();
+  document.getElementById('previewName').textContent = opt.dataset.name;
+  document.getElementById('previewEmail').textContent = opt.dataset.email;
+  document.getElementById('previewScore').textContent = opt.dataset.score + '%';
+  document.getElementById('previewSkills').textContent = '🔧 ' + opt.dataset.skills;
+}
+
+function addMessage(role, text) {
+  const box = document.getElementById('chatBox');
+  const div = document.createElement('div');
+  div.className = role === 'ai'
+    ? 'chat-bubble-ai p-4 max-w-[85%]'
+    : 'chat-bubble-user p-4 max-w-[85%] ml-auto';
+  div.innerHTML = `<p class="text-sm text-gray-200 leading-relaxed">${text.replace(/\n/g,'<br>')}</p>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addTypingIndicator() {
+  const box = document.getElementById('chatBox');
+  const div = document.createElement('div');
+  div.id = 'typingIndicator';
+  div.className = 'chat-bubble-ai p-4 max-w-[85%]';
+  div.innerHTML = `<div class="typing-dots flex gap-1 items-center h-4">
+    <span class="w-2 h-2 bg-[#c0c1ff] rounded-full"></span>
+    <span class="w-2 h-2 bg-[#c0c1ff] rounded-full"></span>
+    <span class="w-2 h-2 bg-[#c0c1ff] rounded-full"></span>
+  </div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('typingIndicator');
+  if (el) el.remove();
+}
+
+async function callClaude(messages, systemPrompt) {
+  const response = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system: systemPrompt, messages: messages })
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+  return data.text || '';
+}
+
+function getCandidateInfo() {
+  const sel = document.getElementById('candidateSelect');
+  const opt = sel.options[sel.selectedIndex];
+  return {
+    name: opt.dataset.name || 'the candidate',
+    skills: opt.dataset.skills || 'N/A',
+    score: opt.dataset.score || 0,
+    status: opt.dataset.status || 'pending'
+  };
+}
+
+function getSystemPrompt(candidate, jobRole) {
+  const modeDescriptions = {
+    technical: 'Focus on technical skills, coding ability, system design, and problem solving.',
+    behavioral: 'Focus on behavioral questions using the STAR method — past situations, actions and results.',
+    hr: 'Focus on cultural fit, salary expectations, career goals, and team dynamics.',
+    comprehensive: 'Cover technical skills, behavioral competencies, and HR questions in a balanced mix.'
+  };
+
+  return `You are an expert technical recruiter conducting a ${selectedMode} interview for the role of "${jobRole || 'Software Engineer'}".
+
+Candidate profile:
+- Name: ${candidate.name}
+- Skills: ${candidate.skills}
+- ATS Score: ${candidate.score}%
+- Current Status: ${candidate.status}
+
+Interview style: ${modeDescriptions[selectedMode]}
+
+Rules:
+- Ask ONE question at a time
+- After the candidate answers, give brief constructive feedback (1-2 sentences), then ask the next question
+- After ${MAX_QUESTIONS} questions, say "INTERVIEW_COMPLETE" and provide a final evaluation with: Overall Score (0-100), Strengths, Areas to Improve, and Hiring Recommendation
+- Keep a professional but conversational tone
+- Address the candidate by their first name`;
+}
+
+async function startInterview() {
+  const sel = document.getElementById('candidateSelect');
+  if (!sel.value) {
+    alert('Please select a candidate first!');
+    return;
+  }
+
+  const candidate = getCandidateInfo();
+  const jobRole = document.getElementById('jobRoleInput').value || 'Software Engineer';
+
+  // Reset
+  conversationHistory = [];
+  questionCount = 0;
+  interviewActive = true;
+  document.getElementById('chatBox').innerHTML = '';
+  document.getElementById('evaluationPanel').classList.add('hidden');
+  document.getElementById('userInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('sessionStatus').textContent = `Live session • ${selectedMode} • ${candidate.name}`;
+
+  const systemPrompt = getSystemPrompt(candidate, jobRole);
+
+  // First message
+  addTypingIndicator();
+  try {
+    conversationHistory.push({
+      role: 'user',
+      content: `Start the interview. Greet ${candidate.name} and ask the first question.`
+    });
+
+    const reply = await callClaude(conversationHistory, systemPrompt);
+    conversationHistory.push({ role: 'assistant', content: reply });
+
+    removeTypingIndicator();
+    addMessage('ai', reply);
+    questionCount++;
+  } catch(e) {
+    removeTypingIndicator();
+    addMessage('ai', '⚠️ Could not connect to Gemini API. Error: ' + (err.message || 'Unknown error'));
+  }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text || !interviewActive) return;
+
+  input.value = '';
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+
+  input.disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  addTypingIndicator();
+
+  const candidate = getCandidateInfo();
+  const jobRole = document.getElementById('jobRoleInput').value || 'Software Engineer';
+  const systemPrompt = getSystemPrompt(candidate, jobRole);
+
+  try {
+    const reply = await callClaude(conversationHistory, systemPrompt);
+    conversationHistory.push({ role: 'assistant', content: reply });
+    removeTypingIndicator();
+    addMessage('ai', reply);
+    questionCount++;
+
+    if (reply.includes('INTERVIEW_COMPLETE') || questionCount >= MAX_QUESTIONS + 2) {
+      endInterview(reply);
+    } else {
+      input.disabled = false;
+      document.getElementById('sendBtn').disabled = false;
+      input.focus();
+    }
+  } catch(e) {
+    removeTypingIndicator();
+    addMessage('ai', '⚠️ Error connecting to Gemini. Please try again. Error: ' + (err.message || 'Unknown'));
+    input.disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+
+function endInterview(finalMessage) {
+  interviewActive = false;
+  document.getElementById('userInput').disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('sessionStatus').textContent = 'Session complete';
+
+  // Extract evaluation from final message
+  const evalPanel = document.getElementById('evaluationPanel');
+  const evalContent = document.getElementById('evaluationContent');
+  evalPanel.classList.remove('hidden');
+  evalContent.innerHTML = finalMessage
+    .replace('INTERVIEW_COMPLETE', '')
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#c0c1ff]">$1</strong>');
+}
+
+async function generateQuestionsOnly() {
+  const sel = document.getElementById('candidateSelect');
+  if (!sel.value) { alert('Please select a candidate first!'); return; }
+
+  const candidate = getCandidateInfo();
+  const jobRole = document.getElementById('jobRoleInput').value || 'Software Engineer';
+
+  document.getElementById('chatBox').innerHTML = '';
+  addTypingIndicator();
+
+  const prompt = `Generate 8 strong ${selectedMode} interview questions for ${candidate.name} applying for ${jobRole}.
+Their skills: ${candidate.skills}. ATS Score: ${candidate.score}%.
+Format as a numbered list. For each question, add a brief note on what it evaluates.`;
+
+  try {
+    const reply = await callClaude([{ role: 'user', content: prompt }],
+      'You are an expert recruiter. Generate specific, insightful interview questions.');
+    removeTypingIndicator();
+    addMessage('ai', `📋 <strong>Interview Questions for ${candidate.name}</strong> — ${selectedMode} round:<br><br>${reply}`);
+  } catch(e) {
+    removeTypingIndicator();
+    addMessage('ai', '⚠️ Could not connect to Gemini API. Error: ' + (err.message || 'Unknown'));
+  }
+}
+
+function clearChat() {
+  document.getElementById('chatBox').innerHTML = '';
+  document.getElementById('evaluationPanel').classList.add('hidden');
+  conversationHistory = [];
+  interviewActive = false;
+  questionCount = 0;
+  document.getElementById('userInput').disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('sessionStatus').textContent = 'Ready to start';
+  addMessage('ai', '👋 Chat cleared. Select a candidate and click Start Interview Session to begin a new session.');
+}
+</script>
+</body>
+</html>

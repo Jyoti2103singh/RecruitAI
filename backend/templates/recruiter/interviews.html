@@ -1,0 +1,212 @@
+@"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Interview Scheduler | AIScreen</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+  :root{--bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;--border:rgba(255,255,255,0.07);--purple:#7c5cbf;--purple-bright:#9b7de8;--purple-glow:rgba(124,92,191,0.25);--text:#e8e8f0;--muted:#6b6b80;--success:#4ade80;--danger:#f87171;--warn:#fbbf24;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;}
+  .sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 0;position:fixed;left:0;top:0;bottom:0;}
+  .logo{padding:0 20px 28px;font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--purple-bright);}
+  .logo span{color:var(--text);}
+  .nav-section{padding:0 12px;margin-bottom:8px;}
+  .nav-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);padding:0 8px;margin-bottom:6px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--muted);font-size:13.5px;text-decoration:none;transition:all 0.2s;margin-bottom:2px;}
+  .nav-item:hover{background:var(--bg3);color:var(--text);}
+  .nav-item.active{background:var(--purple-glow);color:var(--purple-bright);}
+  .nav-item i{width:16px;text-align:center;font-size:13px;}
+  .sidebar-bottom{margin-top:auto;padding:0 12px;}
+  .logout-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--danger);font-size:13.5px;text-decoration:none;transition:all 0.2s;width:100%;background:none;border:none;cursor:pointer;font-family:inherit;}
+  .logout-btn:hover{background:rgba(248,113,113,0.08);}
+  .main{margin-left:220px;flex:1;padding:40px;}
+  .page-header{margin-bottom:28px;}
+  .page-header h1{font-family:'Space Mono',monospace;font-size:26px;font-weight:700;}
+  .page-header p{color:var(--muted);margin-top:6px;font-size:14px;}
+  .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+  .stat-val{font-family:'Space Mono',monospace;font-size:26px;font-weight:700;margin-bottom:4px;}
+  .stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;}
+  .stat-val.purple{color:var(--purple-bright);}.stat-val.green{color:var(--success);}.stat-val.yellow{color:var(--warn);}
+  .grid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
+  .tab-row{display:flex;gap:6px;margin-bottom:20px;}
+  .tab-btn{padding:7px 18px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:'DM Sans',sans-serif;transition:all 0.2s;}
+  .tab-btn.active{background:var(--purple-glow);border-color:var(--purple);color:var(--purple-bright);}
+  .slot-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;transition:border-color 0.2s;position:relative;}
+  .slot-card:hover{border-color:var(--purple);}
+  .slot-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--purple-bright);border-radius:3px 0 0 3px;}
+  .slot-date{min-width:56px;text-align:center;background:var(--bg3);border-radius:8px;padding:8px 6px;border:1px solid var(--border);}
+  .slot-date .dn{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--purple-bright);line-height:1;}
+  .slot-date .mn{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:2px;}
+  .slot-info{flex:1;min-width:0;}
+  .slot-title{font-weight:600;font-size:14.5px;margin-bottom:4px;}
+  .slot-meta{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:10px;}
+  .slot-meta span{display:flex;align-items:center;gap:4px;}
+  .slot-badge{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600;background:var(--purple-glow);color:var(--purple-bright);border:1px solid rgba(124,92,191,0.3);white-space:nowrap;}
+  .slot-badge.full{background:rgba(74,222,128,0.1);color:var(--success);border-color:rgba(74,222,128,0.25);}
+  .del-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;}
+  .del-btn:hover{border-color:var(--danger);color:var(--danger);}
+  .panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:22px;}
+  .panel-title{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;margin-bottom:18px;color:var(--purple-bright);}
+  .form-group{margin-bottom:14px;}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600;margin-bottom:6px;}
+  input,select,textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13.5px;padding:9px 12px;outline:none;transition:border-color 0.2s;}
+  input:focus,select:focus{border-color:var(--purple);}
+  select option{background:var(--bg3);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn-primary{width:100%;padding:11px;background:var(--purple);color:#fff;border:none;border-radius:9px;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;margin-top:4px;}
+  .btn-primary:hover{background:var(--purple-bright);box-shadow:0 4px 20px var(--purple-glow);}
+  .table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:var(--bg3);padding:11px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);}
+  td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(255,255,255,0.015);}
+  .confirmed{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600;background:rgba(74,222,128,0.1);color:var(--success);border:1px solid rgba(74,222,128,0.25);}
+  .empty{text-align:center;padding:48px 20px;color:var(--muted);}
+  .empty i{font-size:32px;margin-bottom:12px;display:block;}
+  #toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,0.5);transform:translateY(80px);opacity:0;transition:all 0.3s cubic-bezier(.34,1.56,.64,1);z-index:999;}
+  #toast.show{transform:translateY(0);opacity:1;}
+  #toast.success{border-color:var(--success);color:var(--success);}
+  #toast.error{border-color:var(--danger);color:var(--danger);}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="logo">AI<span>Screen</span></div>
+  <div class="nav-section">
+    <div class="nav-label">Recruiter</div>
+    <a href="/dashboard" class="nav-item"><i class="fa fa-home"></i> Dashboard</a>
+    <a href="/upload" class="nav-item"><i class="fa fa-upload"></i> Screen Resumes</a>
+    <a href="/candidates" class="nav-item"><i class="fa fa-users"></i> Candidates</a>
+    <a href="/recruiter/jobs" class="nav-item"><i class="fa fa-briefcase"></i> Jobs</a>
+    <a href="/recruiter/applications" class="nav-item"><i class="fa fa-file-alt"></i> Applications</a>
+    <a href="/recruiter/interviews" class="nav-item active"><i class="fa fa-calendar"></i> Interviews</a>
+    <a href="/analytics" class="nav-item"><i class="fa fa-chart-bar"></i> Analytics</a>
+  </div>
+  <div class="sidebar-bottom">
+    <a href="/logout" class="logout-btn"><i class="fa fa-sign-out-alt"></i> Logout</a>
+  </div>
+</div>
+<div class="main">
+  <div class="page-header">
+    <h1>Interview Scheduler</h1>
+    <p>Create slots, manage bookings, track your pipeline</p>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val purple" id="stat-total">—</div><div class="stat-label">Total Slots</div></div>
+    <div class="stat-card"><div class="stat-val green" id="stat-booked">—</div><div class="stat-label">Booked</div></div>
+    <div class="stat-card"><div class="stat-val yellow" id="stat-open">—</div><div class="stat-label">Open</div></div>
+  </div>
+  <div class="tab-row">
+    <button class="tab-btn active" onclick="switchTab('slots',this)">📅 Slots</button>
+    <button class="tab-btn" onclick="switchTab('bookings',this)">👤 Bookings</button>
+  </div>
+  <div class="grid">
+    <div>
+      <div id="slots-section">
+        <div id="slots-list"><div class="empty"><i class="fa fa-calendar"></i>Loading...</div></div>
+      </div>
+      <div id="bookings-section" class="hidden">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Applicant</th><th>Interview</th><th>Date & Time</th><th>Location</th><th>Status</th></tr></thead>
+            <tbody id="bookings-body"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">// CREATE SLOT</div>
+      <div class="form-group"><label>Interview Title</label><input type="text" id="f-title" placeholder="e.g. Frontend Round 1"></div>
+      <div class="row2">
+        <div class="form-group"><label>Date</label><input type="date" id="f-date"></div>
+        <div class="form-group"><label>Time</label><input type="time" id="f-time"></div>
+      </div>
+      <div class="row2">
+        <div class="form-group"><label>Duration</label>
+          <select id="f-duration"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="90">90 min</option></select>
+        </div>
+        <div class="form-group"><label>Max Bookings</label><input type="number" id="f-max" min="1" max="20" value="1"></div>
+      </div>
+      <div class="form-group"><label>Location / Link</label><input type="text" id="f-location" placeholder="Google Meet / Zoom / Office"></div>
+      <button class="btn-primary" onclick="createSlot()">+ ADD SLOT</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script>
+  let slots=[];
+  document.getElementById('f-date').min=new Date().toISOString().split('T')[0];
+  async function loadSlots(){
+    const r=await fetch('/api/interview-slots');
+    slots=await r.json();
+    renderSlots();
+    document.getElementById('stat-total').textContent=slots.length;
+    const booked=slots.filter(s=>s.booking_count>0).length;
+    document.getElementById('stat-booked').textContent=booked;
+    document.getElementById('stat-open').textContent=slots.length-booked;
+  }
+  function fmtTime(t){const[h,m]=t.split(':');const hr=parseInt(h);return `${hr>12?hr-12:hr||12}:${m} ${hr>=12?'PM':'AM'}`;}
+  function renderSlots(){
+    const c=document.getElementById('slots-list');
+    if(!slots.length){c.innerHTML='<div class="empty"><i class="fa fa-calendar-plus"></i>No slots yet. Create your first slot →</div>';return;}
+    c.innerHTML=slots.map(s=>{
+      const d=new Date(s.date+'T00:00:00');
+      const full=s.booking_count>=s.max_bookings;
+      return `<div class="slot-card">
+        <div class="slot-date"><div class="dn">${d.getDate()}</div><div class="mn">${d.toLocaleDateString('en-US',{month:'short'})}</div></div>
+        <div class="slot-info">
+          <div class="slot-title">${s.title}</div>
+          <div class="slot-meta"><span><i class="fa fa-clock"></i>${fmtTime(s.time)}</span><span><i class="fa fa-hourglass"></i>${s.duration} min</span><span><i class="fa fa-map-marker-alt"></i>${s.location}</span></div>
+        </div>
+        <span class="slot-badge ${full?'full':''}">${s.booking_count}/${s.max_bookings} ${full?'Full':'Open'}</span>
+        <button class="del-btn" onclick="deleteSlot(${s.id})"><i class="fa fa-trash"></i></button>
+      </div>`;
+    }).join('');
+  }
+  async function loadBookings(){
+    const r=await fetch('/api/interview-bookings');
+    const b=await r.json();
+    const tb=document.getElementById('bookings-body');
+    if(!b.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">No bookings yet</td></tr>';return;}
+    tb.innerHTML=b.map(x=>{
+      const d=new Date(x.date+'T00:00:00');
+      return `<tr><td><strong>${x.applicant}</strong></td><td>${x.title}</td><td>${d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})} · ${fmtTime(x.time)}</td><td>${x.location}</td><td><span class="confirmed">${x.status}</span></td></tr>`;
+    }).join('');
+  }
+  async function createSlot(){
+    const title=document.getElementById('f-title').value.trim();
+    const date=document.getElementById('f-date').value;
+    const time=document.getElementById('f-time').value;
+    if(!title||!date||!time){showToast('Fill in title, date and time','error');return;}
+    const r=await fetch('/api/interview-slots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,date,time,duration:+document.getElementById('f-duration').value,max_bookings:+document.getElementById('f-max').value,location:document.getElementById('f-location').value.trim()||'Google Meet'})});
+    const d=await r.json();
+    if(d.success){showToast('Slot created!','success');document.getElementById('f-title').value='';document.getElementById('f-date').value='';document.getElementById('f-time').value='';document.getElementById('f-location').value='';loadSlots();}
+    else showToast(d.error||'Failed','error');
+  }
+  async function deleteSlot(id){
+    if(!confirm('Delete this slot and all its bookings?'))return;
+    const r=await fetch(`/api/interview-slots/${id}`,{method:'DELETE'});
+    const d=await r.json();
+    if(d.success){showToast('Slot deleted','success');loadSlots();}
+  }
+  function switchTab(tab,btn){
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('slots-section').classList.toggle('hidden',tab!=='slots');
+    document.getElementById('bookings-section').classList.toggle('hidden',tab!=='bookings');
+    if(tab==='bookings')loadBookings();
+  }
+  function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=(type==='success'?'✓ ':'✗ ')+msg;t.className=`show ${type}`;setTimeout(()=>{t.className='';},3000);}
+  loadSlots();
+</script>
+</body>
+</html>
+"@ | Out-File -Encoding utf8 "C:\Users\anura\OneDrive\Desktop\resume screening\backend\templates\recruiter\interviews.html"
+Write-Host "interviews.html created!"

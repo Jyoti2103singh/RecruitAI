@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lumina AI Resume Builder</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'Inter',sans-serif;
+    background:#0b0b12;
+    color:white;
+    display:flex;
+    min-height:100vh;
+}
+
+.sidebar{
+    width:430px;
+    background:#111118;
+    border-right:1px solid rgba(255,255,255,0.08);
+    padding:25px;
+    overflow-y:auto;
+}
+
+.main{
+    flex:1;
+    padding:30px;
+    overflow-y:auto;
+}
+
+.logo{
+    font-size:30px;
+    font-weight:800;
+    color:#9b7dff;
+    margin-bottom:25px;
+}
+
+.card{
+    background:#171722;
+    border-radius:18px;
+    padding:18px;
+    margin-bottom:18px;
+    border:1px solid rgba(255,255,255,0.05);
+}
+
+.card h2{
+    font-size:17px;
+    margin-bottom:14px;
+    color:#9b7dff;
+}
+
+label{
+    display:block;
+    margin-top:12px;
+    margin-bottom:6px;
+    font-size:13px;
+    opacity:.8;
+}
+
+input,
+textarea,
+select{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    background:#0f0f17;
+    color:white;
+    outline:none;
+    font-size:14px;
+}
+
+textarea{
+    resize:none;
+}
+
+button{
+    cursor:pointer;
+}
+
+.add-btn{
+    width:100%;
+    margin-top:14px;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    background:#7c5cf5;
+    color:white;
+    font-weight:700;
+}
+
+.add-btn:hover{
+    background:#9478ff;
+}
+
+.list-item{
+    background:#0f0f17;
+    padding:12px;
+    border-radius:12px;
+    margin-top:10px;
+}
+
+.skill-tag{
+    display:inline-block;
+    background:#7c5cf5;
+    padding:8px 14px;
+    border-radius:999px;
+    margin:6px;
+    font-size:13px;
+}
+
+.preview{
+    max-width:900px;
+    margin:auto;
+    background:white;
+    color:#111;
+    border-radius:20px;
+    padding:50px;
+    min-height:1000px;
+}
+
+.resume-name{
+    font-size:38px;
+    font-weight:800;
+}
+
+.resume-title{
+    margin-top:6px;
+    font-size:18px;
+    color:#666;
+}
+
+.resume-contact{
+    margin-top:12px;
+    color:#777;
+    font-size:14px;
+}
+
+.section{
+    margin-top:32px;
+}
+
+.section h3{
+    color:#7c5cf5;
+    margin-bottom:14px;
+    font-size:18px;
+}
+
+.item{
+    margin-bottom:18px;
+}
+
+.item-title{
+    font-weight:700;
+    font-size:16px;
+}
+
+.item-sub{
+    color:#666;
+    margin-top:4px;
+}
+
+.actions{
+    display:flex;
+    gap:10px;
+    margin-top:20px;
+}
+
+.actions button{
+    flex:1;
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    font-weight:700;
+}
+
+.save-btn{
+    background:#222233;
+    color:white;
+}
+
+.export-btn{
+    background:#7c5cf5;
+    color:white;
+}
+
+.apply-btn{
+    background:#00b894;
+    color:white;
+}
+
+.score-box{
+    text-align:center;
+    padding:20px;
+}
+
+.score{
+    font-size:46px;
+    font-weight:800;
+    color:#00d084;
+}
+
+.ai-box{
+    background:#0f0f17;
+    padding:14px;
+    border-radius:14px;
+    margin-top:10px;
+    line-height:1.6;
+    font-size:14px;
+}
+
+.template-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+.template-btn{
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    background:#0f0f17;
+    color:white;
+}
+
+.template-btn:hover{
+    background:#7c5cf5;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+<div class="logo">
+Lumina AI
+</div>
+
+<!-- ATS SCORE -->
+
+<div class="card">
+
+<h2>ATS Resume Score</h2>
+
+<div class="score-box">
+
+<div class="score" id="atsScore">
+82%
+</div>
+
+<p>
+Strong Resume
+</p>
+
+</div>
+
+</div>
+
+<!-- TEMPLATE -->
+
+<div class="card">
+
+<h2>Resume Templates</h2>
+
+<div class="template-grid">
+
+<button class="template-btn" onclick="changeTemplate('modern')">
+Modern
+</button>
+
+<button class="template-btn" onclick="changeTemplate('minimal')">
+Minimal
+</button>
+
+<button class="template-btn" onclick="changeTemplate('dark')">
+Dark
+</button>
+
+<button class="template-btn" onclick="changeTemplate('corporate')">
+Corporate
+</button>
+
+</div>
+
+</div>
+
+<!-- PERSONAL -->
+
+<div class="card">
+
+<h2>Personal Details</h2>
+
+<label>Name</label>
+<input type="text" id="name" oninput="renderResume()">
+
+<label>Headline</label>
+<input type="text" id="headline" oninput="renderResume()">
+
+<label>Email</label>
+<input type="email" id="email" oninput="renderResume()">
+
+<label>Phone</label>
+<input type="text" id="phone" oninput="renderResume()">
+
+<label>Location</label>
+<input type="text" id="location" oninput="renderResume()">
+
+<label>Summary</label>
+<textarea rows="4" id="summary" oninput="renderResume()"></textarea>
+
+</div>
+
+<!-- SKILLS -->
+
+<div class="card">
+
+<h2>Skills</h2>
+
+<input type="text" id="skillInput" placeholder="Add skill">
+
+<button class="add-btn" onclick="addSkill()">
++ Add Skill
+</button>
+
+<div id="skillList"></div>
+
+</div>
+
+<!-- EXPERIENCE -->
+
+<div class="card">
+
+<h2>Experience</h2>
+
+<input type="text" id="jobTitle" placeholder="Job Title">
+
+<input type="text" id="company" placeholder="Company" style="margin-top:10px;">
+
+<textarea rows="3" id="jobDesc" placeholder="Description" style="margin-top:10px;"></textarea>
+
+<button class="add-btn" onclick="addExperience()">
++ Add Experience
+</button>
+
+<div id="experienceList"></div>
+
+</div>
+
+<!-- EDUCATION -->
+
+<div class="card">
+
+<h2>Education</h2>
+
+<input type="text" id="degree" placeholder="Degree">
+
+<input type="text" id="college" placeholder="College" style="margin-top:10px;">
+
+<button class="add-btn" onclick="addEducation()">
++ Add Education
+</button>
+
+<div id="educationList"></div>
+
+</div>
+
+<!-- PROJECTS -->
+
+<div class="card">
+
+<h2>Projects</h2>
+
+<input type="text" id="projectName" placeholder="Project Name">
+
+<textarea rows="3" id="projectDesc" placeholder="Project Description" style="margin-top:10px;"></textarea>
+
+<button class="add-btn" onclick="addProject()">
++ Add Project
+</button>
+
+<div id="projectList"></div>
+
+</div>
+
+<!-- LANGUAGES -->
+
+<div class="card">
+
+<h2>Languages</h2>
+
+<input type="text" id="languageInput" placeholder="Language">
+
+<button class="add-btn" onclick="addLanguage()">
++ Add Language
+</button>
+
+<div id="languageList"></div>
+
+</div>
+
+<!-- CERTIFICATIONS -->
+
+<div class="card">
+
+<h2>Certifications</h2>
+
+<input type="text" id="certInput" placeholder="Certification">
+
+<button class="add-btn" onclick="addCertification()">
++ Add Certification
+</button>
+
+<div id="certList"></div>
+
+</div>
+
+<!-- AI SUGGESTIONS -->
+
+<div class="card">
+
+<h2>AI Suggestions</h2>
+
+<div class="ai-box">
+✅ Add measurable achievements
+
+<br><br>
+
+✅ Add GitHub profile
+
+<br><br>
+
+✅ Add cloud technologies
+
+<br><br>
+
+✅ Use stronger action verbs
+</div>
+
+</div>
+
+<div class="actions">
+
+<button class="save-btn" onclick="saveDraft()">
+Save
+</button>
+
+<button class="export-btn" onclick="downloadPDF()">
+Export PDF
+</button>
+
+<button class="apply-btn" onclick="applyResume()">
+Apply
+</button>
+
+</div>
+
+</div>
+
+<!-- PREVIEW -->
+
+<div class="main">
+
+<div class="preview" id="resumePreview">
+
+</div>
+
+</div>
+
+<script>
+
+let resume = {
+    skills:[],
+    experience:[],
+    education:[],
+    projects:[],
+    languages:[],
+    certifications:[]
+};
+
+function renderResume(){
+
+document.getElementById("resumePreview").innerHTML = `
+
+<div class="resume-name">
+${document.getElementById("name").value || "Your Name"}
+</div>
+
+<div class="resume-title">
+${document.getElementById("headline").value || ""}
+</div>
+
+<div class="resume-contact">
+${document.getElementById("email").value || ""}
+ •
+${document.getElementById("phone").value || ""}
+ •
+${document.getElementById("location").value || ""}
+</div>
+
+<div class="section">
+<h3>Professional Summary</h3>
+<p>${document.getElementById("summary").value || ""}</p>
+</div>
+
+<div class="section">
+<h3>Skills</h3>
+
+${resume.skills.map(skill=>`
+<span class="skill-tag">${skill}</span>
+`).join("")}
+
+</div>
+
+<div class="section">
+<h3>Experience</h3>
+
+${resume.experience.map(exp=>`
+<div class="item">
+<div class="item-title">${exp.title}</div>
+<div class="item-sub">${exp.company}</div>
+<p>${exp.desc}</p>
+</div>
+`).join("")}
+
+</div>
+
+<div class="section">
+<h3>Education</h3>
+
+${resume.education.map(edu=>`
+<div class="item">
+<div class="item-title">${edu.degree}</div>
+<div class="item-sub">${edu.college}</div>
+</div>
+`).join("")}
+
+</div>
+
+<div class="section">
+<h3>Projects</h3>
+
+${resume.projects.map(project=>`
+<div class="item">
+<div class="item-title">${project.name}</div>
+<p>${project.desc}</p>
+</div>
+`).join("")}
+
+</div>
+
+<div class="section">
+<h3>Languages</h3>
+
+${resume.languages.map(lang=>`
+<span class="skill-tag">${lang}</span>
+`).join("")}
+
+</div>
+
+<div class="section">
+<h3>Certifications</h3>
+
+${resume.certifications.map(cert=>`
+<div class="item">${cert}</div>
+`).join("")}
+
+</div>
+
+`;
+
+calculateATS();
+
+}
+
+function calculateATS(){
+
+let score = 40;
+
+score += resume.skills.length * 5;
+score += resume.projects.length * 4;
+score += resume.experience.length * 8;
+score += resume.education.length * 5;
+
+if(score > 98){
+    score = 98;
+}
+
+document.getElementById("atsScore").innerText = score + "%";
+
+}
+
+function addSkill(){
+
+const skill = document.getElementById("skillInput").value;
+
+if(!skill) return;
+
+resume.skills.push(skill);
+
+document.getElementById("skillInput").value = "";
+
+renderLists();
+
+renderResume();
+
+}
+
+function addExperience(){
+
+resume.experience.push({
+title:document.getElementById("jobTitle").value,
+company:document.getElementById("company").value,
+desc:document.getElementById("jobDesc").value
+});
+
+renderLists();
+
+renderResume();
+
+}
+
+function addEducation(){
+
+resume.education.push({
+degree:document.getElementById("degree").value,
+college:document.getElementById("college").value
+});
+
+renderLists();
+
+renderResume();
+
+}
+
+function addProject(){
+
+resume.projects.push({
+name:document.getElementById("projectName").value,
+desc:document.getElementById("projectDesc").value
+});
+
+renderLists();
+
+renderResume();
+
+}
+
+function addLanguage(){
+
+const lang = document.getElementById("languageInput").value;
+
+resume.languages.push(lang);
+
+renderLists();
+
+renderResume();
+
+}
+
+function addCertification(){
+
+const cert = document.getElementById("certInput").value;
+
+resume.certifications.push(cert);
+
+renderLists();
+
+renderResume();
+
+}
+
+function renderLists(){
+
+document.getElementById("skillList").innerHTML =
+resume.skills.map(s=>`
+<div class="list-item">${s}</div>
+`).join("");
+
+document.getElementById("experienceList").innerHTML =
+resume.experience.map(e=>`
+<div class="list-item">${e.title}</div>
+`).join("");
+
+document.getElementById("educationList").innerHTML =
+resume.education.map(e=>`
+<div class="list-item">${e.degree}</div>
+`).join("");
+
+document.getElementById("projectList").innerHTML =
+resume.projects.map(p=>`
+<div class="list-item">${p.name}</div>
+`).join("");
+
+document.getElementById("languageList").innerHTML =
+resume.languages.map(l=>`
+<div class="list-item">${l}</div>
+`).join("");
+
+document.getElementById("certList").innerHTML =
+resume.certifications.map(c=>`
+<div class="list-item">${c}</div>
+`).join("");
+
+}
+
+function changeTemplate(type){
+
+const preview = document.getElementById("resumePreview");
+
+if(type === "dark"){
+    preview.style.background = "#111";
+    preview.style.color = "white";
+}
+
+else if(type === "minimal"){
+    preview.style.background = "white";
+    preview.style.color = "#111";
+    preview.style.border = "1px solid #eee";
+}
+
+else if(type === "corporate"){
+    preview.style.background = "#f8fbff";
+    preview.style.color = "#111";
+}
+
+else{
+    preview.style.background = "white";
+    preview.style.color = "#111";
+}
+
+}
+
+async function saveDraft(){
+
+const data = {
+resume:resume,
+name:document.getElementById("name").value,
+headline:document.getElementById("headline").value,
+email:document.getElementById("email").value
+};
+
+await fetch("/api/resume-builder/save",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify(data)
+});
+
+alert("Draft Saved");
+
+}
+
+async function applyResume(){
+
+await fetch("/api/resume-builder/apply",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+email:document.getElementById("email").value,
+job:"Software Engineer"
+})
+});
+
+alert("Application Submitted");
+
+}
+
+function downloadPDF(){
+
+const element = document.getElementById("resumePreview");
+
+html2pdf().from(element).save("resume.pdf");
+
+}
+
+renderResume();
+
+</script>
+
+</body>
+</html>

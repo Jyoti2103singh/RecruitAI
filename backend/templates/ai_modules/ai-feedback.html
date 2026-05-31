@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>AI Feedback - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
+    <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
+    <a href="/results"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📋 Results</a>
+    <a href="/candidates"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">👥 Candidates</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🕐 History</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold">AI Feedback Generator</h1>
+        <p class="text-gray-400 mt-1">Generate detailed feedback for any candidate resume</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- INPUT -->
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Candidate Details</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-gray-400 text-sm block mb-1">Candidate Name</label>
+                    <input id="fbName" type="text" placeholder="e.g. John Smith"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-1">Job Role Applied For</label>
+                    <input id="fbRole" type="text" placeholder="e.g. Senior Python Developer"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-1">Key Skills</label>
+                    <input id="fbSkills" type="text" placeholder="Python, Django, AWS, Docker"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-1">ATS Score (%)</label>
+                    <input id="fbScore" type="number" placeholder="e.g. 82"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-1">Additional Notes</label>
+                    <textarea id="fbNotes" rows="3" placeholder="Any extra context about the candidate..."
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500 resize-none"></textarea>
+                </div>
+                <button onclick="generateFeedback()" class="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all">
+                    🤖 Generate AI Feedback
+                </button>
+            </div>
+        </div>
+
+        <!-- OUTPUT -->
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h3 class="font-bold text-lg mb-4">Generated Feedback</h3>
+            <div id="feedbackOutput" class="text-gray-400 text-sm italic">
+                Fill in candidate details and click Generate to see AI feedback here...
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+function generateFeedback() {
+    const name = document.getElementById('fbName').value || 'The candidate';
+    const role = document.getElementById('fbRole').value || 'the applied role';
+    const skills = document.getElementById('fbSkills').value || 'various skills';
+    const score = document.getElementById('fbScore').value || 'N/A';
+    const notes = document.getElementById('fbNotes').value;
+
+    const decision = score >= 80 ? 'strong hire recommendation' : score >= 60 ? 'shortlist recommendation' : 'further review needed';
+
+    document.getElementById('feedbackOutput').innerHTML = `
+        <div class="space-y-4">
+            <div class="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
+                <p class="text-purple-300 font-bold mb-2">📋 Overall Assessment</p>
+                <p class="text-gray-300">${name} is a <strong>${decision}</strong> for the ${role} position with an ATS score of <strong>${score}%</strong>.</p>
+            </div>
+            <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                <p class="text-green-400 font-bold mb-2">✅ Strengths</p>
+                <ul class="text-gray-300 text-sm space-y-1">
+                    <li>• Strong technical profile with ${skills}</li>
+                    <li>• Resume is well-structured and ATS-optimized</li>
+                    <li>• Demonstrated relevant experience for this role</li>
+                </ul>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                <p class="text-red-400 font-bold mb-2">❌ Areas to Improve</p>
+                <ul class="text-gray-300 text-sm space-y-1">
+                    <li>• Could strengthen quantifiable achievements</li>
+                    <li>• Leadership experience not clearly demonstrated</li>
+                    <li>• Consider adding certifications for credibility</li>
+                </ul>
+            </div>
+            <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+                <p class="text-yellow-400 font-bold mb-2">💡 Recommendations</p>
+                <ul class="text-gray-300 text-sm space-y-1">
+                    <li>• Schedule a technical round to verify ${skills.split(',')[0]} depth</li>
+                    <li>• Ask about team collaboration and project ownership</li>
+                    <li>• Verify employment history for the last 3 years</li>
+                </ul>
+            </div>
+            ${notes ? `<div class="bg-gray-800 rounded-xl p-4"><p class="text-gray-400 text-sm italic">Note: ${notes}</p></div>` : ''}
+        </div>`;
+}
+</script>
+</body>
+</html>

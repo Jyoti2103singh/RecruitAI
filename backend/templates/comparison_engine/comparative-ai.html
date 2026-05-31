@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Comparative AI - Lumina AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
+    <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
+    <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
+    <a href="/comparative-ai"     class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-purple-500/20 border-l-4 border-purple-400 mb-1">🤖 Comparative AI</a>
+    <a href="/market-insights"    class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🌐 Market Insights</a>
+    <a href="/ranking-analysis"   class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🏆 Ranking</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+    <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold">Comparative AI Engine</h1>
+        <p class="text-gray-400 mt-1">Visual side-by-side AI-powered candidate comparison</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-900 rounded-2xl border border-purple-500/30 p-6">
+            <h3 class="font-bold text-purple-300 mb-4">Candidate A</h3>
+            <div class="space-y-3">
+                <input id="aName" type="text" placeholder="Name" value="Jordan Sterling"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                <input id="aScore" type="number" placeholder="ATS Score" value="91"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                <input id="aExp" type="number" placeholder="Years Experience" value="6"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+                <input id="aSkills" type="text" placeholder="Skills" value="Python, AWS, Kubernetes, Docker"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
+            </div>
+        </div>
+        <div class="bg-gray-900 rounded-2xl border border-blue-500/30 p-6">
+            <h3 class="font-bold text-blue-300 mb-4">Candidate B</h3>
+            <div class="space-y-3">
+                <input id="bName" type="text" placeholder="Name" value="Alex Kumar"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"/>
+                <input id="bScore" type="number" placeholder="ATS Score" value="78"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"/>
+                <input id="bExp" type="number" placeholder="Years Experience" value="4"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"/>
+                <input id="bSkills" type="text" placeholder="Skills" value="React, Node.js, GraphQL, TypeScript"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"/>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="compareTwo()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 py-4 rounded-2xl font-bold text-lg mb-8 transition-all">
+        ⚡ Run Comparative Analysis
+    </button>
+
+    <div id="comparisonResult" class="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+                <h3 class="font-bold text-lg mb-4">Score Comparison</h3>
+                <canvas id="radarChart" height="250"></canvas>
+            </div>
+            <div id="comparisonText" class="bg-gray-900 rounded-2xl border border-gray-800 p-6"></div>
+        </div>
+    </div>
+</main>
+
+<script>
+let radarChart = null;
+
+function compareTwo() {
+    const a = {
+        name: document.getElementById('aName').value || 'Candidate A',
+        score: parseInt(document.getElementById('aScore').value) || 0,
+        exp: parseInt(document.getElementById('aExp').value) || 0,
+        skills: document.getElementById('aSkills').value.split(',').length
+    };
+    const b = {
+        name: document.getElementById('bName').value || 'Candidate B',
+        score: parseInt(document.getElementById('bScore').value) || 0,
+        exp: parseInt(document.getElementById('bExp').value) || 0,
+        skills: document.getElementById('bSkills').value.split(',').length
+    };
+
+    document.getElementById('comparisonResult').classList.remove('hidden');
+
+    if (radarChart) radarChart.destroy();
+
+    radarChart = new Chart(document.getElementById('radarChart'), {
+        type: 'radar',
+        data: {
+            labels: ['ATS Score', 'Experience', 'Skills Count', 'Potential', 'Overall'],
+            datasets: [
+                {
+                    label: a.name,
+                    data: [a.score, Math.min(a.exp * 15, 100), Math.min(a.skills * 20, 100), 85, Math.round((a.score + a.exp*10 + a.skills*10)/3)],
+                    backgroundColor: 'rgba(167,139,250,0.2)',
+                    borderColor: '#a78bfa',
+                    pointBackgroundColor: '#a78bfa'
+                },
+                {
+                    label: b.name,
+                    data: [b.score, Math.min(b.exp * 15, 100), Math.min(b.skills * 20, 100), 75, Math.round((b.score + b.exp*10 + b.skills*10)/3)],
+                    backgroundColor: 'rgba(96,165,250,0.2)',
+                    borderColor: '#60a5fa',
+                    pointBackgroundColor: '#60a5fa'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#9ca3af' } } },
+            scales: { r: { ticks: { color: '#9ca3af', backdropColor: 'transparent' }, grid: { color: 'rgba(255,255,255,0.1)' }, pointLabels: { color: '#9ca3af' } } }
+        }
+    });
+
+    const winner = a.score >= b.score ? a.name : b.name;
+    document.getElementById('comparisonText').innerHTML = `
+        <h3 class="font-bold text-lg mb-4">Analysis Summary</h3>
+        <div class="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 mb-4">
+            <p class="text-purple-300 font-bold">🏆 Recommended: ${winner}</p>
+        </div>
+        <div class="space-y-3">
+            <div class="flex justify-between items-center bg-gray-800 rounded-xl p-3">
+                <span class="text-gray-400 text-sm">ATS Score</span>
+                <div class="flex gap-4">
+                    <span class="text-purple-400 font-bold">${a.score}%</span>
+                    <span class="text-gray-500">vs</span>
+                    <span class="text-blue-400 font-bold">${b.score}%</span>
+                </div>
+            </div>
+            <div class="flex justify-between items-center bg-gray-800 rounded-xl p-3">
+                <span class="text-gray-400 text-sm">Experience</span>
+                <div class="flex gap-4">
+                    <span class="text-purple-400 font-bold">${a.exp} yrs</span>
+                    <span class="text-gray-500">vs</span>
+                    <span class="text-blue-400 font-bold">${b.exp} yrs</span>
+                </div>
+            </div>
+            <div class="flex justify-between items-center bg-gray-800 rounded-xl p-3">
+                <span class="text-gray-400 text-sm">Skills Count</span>
+                <div class="flex gap-4">
+                    <span class="text-purple-400 font-bold">${a.skills}</span>
+                    <span class="text-gray-500">vs</span>
+                    <span class="text-blue-400 font-bold">${b.skills}</span>
+                </div>
+            </div>
+        </div>`;
+}
+</script>
+</body>
+</html>

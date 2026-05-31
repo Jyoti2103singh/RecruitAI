@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Results - Lumina AI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #13131b; color: #e4e1ed; }
+  .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+  .badge-hire    { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+  .badge-shortlisted { background: rgba(234,179,8,0.12); color: #facc15; border: 1px solid rgba(234,179,8,0.2); }
+  .badge-rejected { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+  .badge-pending  { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+  .score-bar { background: linear-gradient(90deg, #03b5d3, #c0c1ff); border-radius: 9999px; height: 6px; }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+</style>
+</head>
+<body class="min-h-screen flex">
+
+<!-- SIDEBAR -->
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-[#1b1b23] border-r border-white/10 flex flex-col py-8 px-4 z-50">
+  <h1 class="text-[#c0c1ff] font-bold text-lg mb-8" style="font-family:Sora">Lumina AI</h1>
+  <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📊 Dashboard</a>
+  <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📤 Upload Resume</a>
+  <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">🔍 AI Screening</a>
+  <a href="/results"            class="flex items-center gap-3 text-white px-3 py-2 rounded-lg bg-[#c0c1ff]/10 border-l-4 border-[#c0c1ff] mb-1 text-sm">📋 Results</a>
+  <a href="/candidates"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">👥 Candidates</a>
+  <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">⚖️ Compare</a>
+  <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">🕐 History</a>
+  <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1 text-sm">📈 Analytics</a>
+  <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto text-sm">🚪 Logout</a>
+</nav>
+
+<main class="ml-[220px] p-8 w-full">
+
+  <!-- HEADER -->
+  <div class="flex justify-between items-center mb-8">
+    <div>
+      <h2 class="text-2xl font-bold" style="font-family:Sora">Screening Results</h2>
+      <p class="text-gray-400 text-sm mt-1">All candidates screened by Lumina AI</p>
+    </div>
+    <a href="/upload" class="bg-[#c0c1ff] text-[#1000a9] px-5 py-2 rounded-xl font-bold text-sm hover:opacity-90 transition-all">
+      + Upload Resume
+    </a>
+  </div>
+
+  {% if results %}
+
+  <!-- SUMMARY CARDS -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="glass rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-[#c0c1ff]">{{ results | length }}</p>
+      <p class="text-gray-400 text-xs mt-1">Total Screened</p>
+    </div>
+    <div class="glass rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-green-400">{{ results | selectattr('status', 'equalto', 'hired') | list | length }}</p>
+      <p class="text-gray-400 text-xs mt-1">Hired</p>
+    </div>
+    <div class="glass rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-yellow-400">{{ results | selectattr('status', 'equalto', 'shortlisted') | list | length }}</p>
+      <p class="text-gray-400 text-xs mt-1">Shortlisted</p>
+    </div>
+    <div class="glass rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-red-400">{{ results | selectattr('status', 'equalto', 'rejected') | list | length }}</p>
+      <p class="text-gray-400 text-xs mt-1">Rejected</p>
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="flex gap-3 mb-6 flex-wrap">
+    <button onclick="filterStatus('all')"         class="filter-btn active px-4 py-1.5 rounded-full text-sm border border-white/10 hover:border-[#c0c1ff]/50 transition-all" data-status="all">All</button>
+    <button onclick="filterStatus('pending')"     class="filter-btn px-4 py-1.5 rounded-full text-sm border border-white/10 hover:border-[#c0c1ff]/50 transition-all" data-status="pending">Pending</button>
+    <button onclick="filterStatus('hired')"       class="filter-btn px-4 py-1.5 rounded-full text-sm border border-white/10 hover:border-[#c0c1ff]/50 transition-all" data-status="hired">Hired</button>
+    <button onclick="filterStatus('shortlisted')" class="filter-btn px-4 py-1.5 rounded-full text-sm border border-white/10 hover:border-[#c0c1ff]/50 transition-all" data-status="shortlisted">Shortlisted</button>
+    <button onclick="filterStatus('rejected')"    class="filter-btn px-4 py-1.5 rounded-full text-sm border border-white/10 hover:border-[#c0c1ff]/50 transition-all" data-status="rejected">Rejected</button>
+  </div>
+
+  <!-- TABLE -->
+  <div class="glass rounded-2xl overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
+          <th class="text-left px-6 py-4">#</th>
+          <th class="text-left px-6 py-4">Candidate</th>
+          <th class="text-left px-6 py-4">Contact</th>
+          <th class="text-left px-6 py-4">Skills</th>
+          <th class="text-left px-6 py-4">ATS Score</th>
+          <th class="text-left px-6 py-4">Status</th>
+          <th class="text-left px-6 py-4">Date</th>
+          <th class="text-left px-6 py-4">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr class="border-b border-white/5 transition-all result-row" data-status="{{ r.status or 'pending' }}">
+          <td class="px-6 py-4 text-gray-500">{{ loop.index }}</td>
+          <td class="px-6 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-[#c0c1ff]/20 flex items-center justify-center text-xs font-bold text-[#c0c1ff]">
+                {{ (r.name or 'U')[0] | upper }}
+              </div>
+              <div>
+                <p class="font-semibold text-white">{{ r.name or 'Unknown' }}</p>
+                <p class="text-gray-500 text-xs">ID #{{ r.id }}</p>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4">
+            <p class="text-gray-300">{{ r.email or 'N/A' }}</p>
+            <p class="text-gray-500 text-xs">{{ r.phone or '' }}</p>
+          </td>
+          <td class="px-6 py-4">
+            <div class="flex flex-wrap gap-1 max-w-[180px]">
+              {% for skill in (r.skills_json or [])[:3] %}
+              <span class="bg-[#c0c1ff]/10 text-[#c0c1ff] px-2 py-0.5 rounded-full text-xs">{{ skill }}</span>
+              {% endfor %}
+              {% if (r.skills_json or []) | length > 3 %}
+              <span class="text-gray-500 text-xs">+{{ (r.skills_json | length) - 3 }} more</span>
+              {% endif %}
+            </div>
+          </td>
+          <td class="px-6 py-4">
+            <div class="flex flex-col gap-1 min-w-[80px]">
+              <span class="font-bold text-[#c0c1ff]">{{ r.score or 0 }}%</span>
+              <div class="w-full bg-white/10 rounded-full h-1.5">
+                <div class="score-bar" style="width:{{ r.score or 0 }}%"></div>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4">
+            <span class="px-3 py-1 rounded-full text-xs font-bold
+              {% if r.status == 'hired' %}badge-hire
+              {% elif r.status == 'shortlisted' %}badge-shortlisted
+              {% elif r.status == 'rejected' %}badge-rejected
+              {% else %}badge-pending{% endif %}">
+              {{ (r.status or 'pending') | upper }}
+            </span>
+          </td>
+          <td class="px-6 py-4 text-gray-500 text-xs">
+            {{ (r.created_at or '')[:10] }}
+          </td>
+          <td class="px-6 py-4">
+            <a href="/candidate-profile?id={{ r.id }}" class="text-[#c0c1ff] hover:text-white text-xs font-semibold border border-[#c0c1ff]/20 px-3 py-1 rounded-lg hover:bg-[#c0c1ff]/10 transition-all">
+              View →
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <!-- EMPTY STATE -->
+  <div class="glass rounded-2xl p-16 text-center">
+    <p class="text-6xl mb-4">📭</p>
+    <h3 class="text-xl font-bold mb-2">No Results Yet</h3>
+    <p class="text-gray-400 mb-6">Upload and screen a resume to see results here.</p>
+    <a href="/upload" class="bg-[#c0c1ff] text-[#1000a9] px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-all">
+      Upload First Resume
+    </a>
+  </div>
+  {% endif %}
+
+</main>
+
+<script>
+function filterStatus(status) {
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.status === status);
+    b.style.borderColor = b.dataset.status === status ? '#c0c1ff' : '';
+    b.style.color = b.dataset.status === status ? '#c0c1ff' : '';
+  });
+  document.querySelectorAll('.result-row').forEach(row => {
+    row.style.display = (status === 'all' || row.dataset.status === status) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

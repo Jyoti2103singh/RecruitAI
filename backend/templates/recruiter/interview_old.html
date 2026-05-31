@@ -1,0 +1,673 @@
+{% extends "base.html" %}
+{% block title %}Interview Scheduler{% endblock %}
+{% block content %}
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a22;
+    --surface2: #1e2330;
+    --border: #2a3142;
+    --accent: #4f8ef7;
+    --accent2: #7c5cfc;
+    --success: #2dd4a0;
+    --warn: #f59e4f;
+    --danger: #f75f5f;
+    --text: #e8eaf0;
+    --muted: #6b7490;
+    --card-glow: 0 0 0 1px var(--border), 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  .sched-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* Header */
+  .sched-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 2.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .sched-header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 800;
+    background: linear-gradient(135deg, #e8eaf0 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+  }
+
+  .sched-header p {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin-top: 0.3rem;
+  }
+
+  /* Tabs */
+  .tab-row {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.35rem;
+    margin-bottom: 2rem;
+    width: fit-content;
+  }
+
+  .tab-btn {
+    padding: 0.55rem 1.4rem;
+    border-radius: 9px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tab-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(79,142,247,0.35);
+  }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Slot card */
+  .slot-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    transition: border-color 0.2s, transform 0.2s;
+    margin-bottom: 0.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slot-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 3px 0 0 3px;
+  }
+
+  .slot-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+
+  .slot-card.fully-booked::before { background: var(--success); }
+  .slot-card.fully-booked { opacity: 0.7; }
+
+  .slot-date-block {
+    min-width: 64px;
+    text-align: center;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 0.6rem 0.5rem;
+    border: 1px solid var(--border);
+  }
+
+  .slot-date-block .day-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+  }
+
+  .slot-date-block .month-txt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-top: 0.15rem;
+  }
+
+  .slot-info { flex: 1; min-width: 0; }
+
+  .slot-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .slot-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .slot-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .slot-badge {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 99px;
+    font-weight: 600;
+    background: rgba(79,142,247,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,0.25);
+    white-space: nowrap;
+  }
+
+  .slot-badge.full {
+    background: rgba(45,212,160,0.12);
+    color: var(--success);
+    border-color: rgba(45,212,160,0.25);
+  }
+
+  .slot-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+
+  .icon-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* Bookings table */
+  .bookings-section { display: none; }
+  .bookings-section.active { display: block; }
+  .slots-section { display: block; }
+  .slots-section.hidden { display: none; }
+
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  th {
+    background: var(--surface2);
+    padding: 0.85rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 0.9rem 1rem;
+    font-size: 0.88rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .status-pill {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 99px;
+    font-weight: 600;
+  }
+
+  .status-pill.confirmed {
+    background: rgba(45,212,160,0.12);
+    color: var(--success);
+  }
+
+  /* Right panel — Create slot form */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: sticky;
+    top: 1.5rem;
+  }
+
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .form-group { margin-bottom: 1rem; }
+
+  label {
+    display: block;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 0.45rem;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    padding: 0.65rem 0.85rem;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,142,247,0.12);
+  }
+
+  select option { background: var(--surface2); }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  .btn-primary {
+    width: 100%;
+    padding: 0.8rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+  }
+
+  .btn-primary:hover {
+    background: #3a7cf5;
+    box-shadow: 0 4px 20px rgba(79,142,247,0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active { transform: translateY(0); }
+
+  /* Stats strip */
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+  }
+
+  .stat-card .num {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--accent);
+  }
+
+  .stat-card .lbl {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+  }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--muted);
+  }
+
+  .empty .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .empty p { font-size: 0.9rem; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 2rem; right: 2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.9rem 1.4rem;
+    font-size: 0.88rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(.34,1.56,.64,1);
+    z-index: 1000;
+    max-width: 320px;
+  }
+
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--success); color: var(--success); }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+</style>
+
+<div class="sched-wrap">
+
+  <div class="sched-header">
+    <div>
+      <h1>Interview Scheduler</h1>
+      <p>Create slots, manage bookings, track your pipeline</p>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-strip">
+    <div class="stat-card">
+      <div class="num" id="stat-slots">—</div>
+      <div class="lbl">Total Slots</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="stat-booked">—</div>
+      <div class="lbl">Booked</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="stat-open">—</div>
+      <div class="lbl">Open</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-row">
+    <button class="tab-btn active" onclick="switchTab('slots')">📅 Slots</button>
+    <button class="tab-btn" onclick="switchTab('bookings')">👤 Bookings</button>
+  </div>
+
+  <div class="main-grid">
+    <!-- Left: slot list / bookings table -->
+    <div>
+      <!-- SLOTS TAB -->
+      <div class="slots-section" id="slots-section">
+        <div id="slots-list">
+          <div class="empty"><div class="icon">📭</div><p>Loading slots...</p></div>
+        </div>
+      </div>
+
+      <!-- BOOKINGS TAB -->
+      <div class="bookings-section" id="bookings-section">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Applicant</th>
+                <th>Interview</th>
+                <th>Date & Time</th>
+                <th>Location</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="bookings-body">
+              <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2.5rem">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: create form -->
+    <div class="panel">
+      <div class="panel-title">✦ Create New Slot</div>
+
+      <div class="form-group">
+        <label>Interview Title</label>
+        <input type="text" id="f-title" placeholder="e.g. Frontend Engineer Round 1">
+      </div>
+
+      <div class="row-2">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="f-date">
+        </div>
+        <div class="form-group">
+          <label>Time</label>
+          <input type="time" id="f-time">
+        </div>
+      </div>
+
+      <div class="row-2">
+        <div class="form-group">
+          <label>Duration (min)</label>
+          <select id="f-duration">
+            <option value="15">15 min</option>
+            <option value="30" selected>30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Max Bookings</label>
+          <input type="number" id="f-max" min="1" max="20" value="1">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Location / Link</label>
+        <input type="text" id="f-location" placeholder="Google Meet / Zoom / Office">
+      </div>
+
+      <button class="btn-primary" onclick="createSlot()">＋ Add Slot</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let allSlots = [];
+
+  // Set today as min date
+  document.getElementById('f-date').min = new Date().toISOString().split('T')[0];
+
+  async function loadSlots() {
+    const res = await fetch('/api/interview-slots');
+    allSlots = await res.json();
+    renderSlots();
+    updateStats();
+  }
+
+  function updateStats() {
+    const total = allSlots.length;
+    const booked = allSlots.filter(s => s.booking_count > 0).length;
+    document.getElementById('stat-slots').textContent = total;
+    document.getElementById('stat-booked').textContent = booked;
+    document.getElementById('stat-open').textContent = total - booked;
+  }
+
+  function fmtDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return {
+      day: d.getDate(),
+      month: d.toLocaleDateString('en-US', { month: 'short' }),
+      full: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    };
+  }
+
+  function fmtTime(t) {
+    const [h, m] = t.split(':');
+    const hr = parseInt(h);
+    return `${hr > 12 ? hr - 12 : hr || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+  }
+
+  function renderSlots() {
+    const container = document.getElementById('slots-list');
+    if (!allSlots.length) {
+      container.innerHTML = '<div class="empty"><div class="icon">📅</div><p>No slots yet. Create your first interview slot →</p></div>';
+      return;
+    }
+    container.innerHTML = allSlots.map(s => {
+      const dt = fmtDate(s.date);
+      const full = s.booking_count >= s.max_bookings;
+      return `
+        <div class="slot-card ${full ? 'fully-booked' : ''}">
+          <div class="slot-date-block">
+            <div class="day-num">${dt.day}</div>
+            <div class="month-txt">${dt.month}</div>
+          </div>
+          <div class="slot-info">
+            <div class="slot-title">${s.title}</div>
+            <div class="slot-meta">
+              <span>🕐 ${fmtTime(s.time)}</span>
+              <span>⏱ ${s.duration} min</span>
+              <span>📍 ${s.location}</span>
+            </div>
+          </div>
+          <div class="slot-actions">
+            <span class="slot-badge ${full ? 'full' : ''}">
+              ${s.booking_count}/${s.max_bookings} ${full ? 'Full' : 'Open'}
+            </span>
+            <button class="icon-btn" onclick="deleteSlot(${s.id})" title="Delete slot">🗑</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function loadBookings() {
+    const res = await fetch('/api/interview-bookings');
+    const bookings = await res.json();
+    const tbody = document.getElementById('bookings-body');
+    if (!bookings.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2.5rem">No bookings yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = bookings.map(b => `
+      <tr>
+        <td><strong>${b.applicant}</strong></td>
+        <td>${b.title}</td>
+        <td>${fmtDate(b.date).full} · ${fmtTime(b.time)}</td>
+        <td>${b.location}</td>
+        <td><span class="status-pill confirmed">${b.status}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  async function createSlot() {
+    const title = document.getElementById('f-title').value.trim();
+    const date = document.getElementById('f-date').value;
+    const time = document.getElementById('f-time').value;
+    const duration = document.getElementById('f-duration').value;
+    const max = document.getElementById('f-max').value;
+    const location = document.getElementById('f-location').value.trim() || 'Google Meet';
+
+    if (!title || !date || !time) {
+      showToast('Please fill in title, date and time', 'error');
+      return;
+    }
+
+    const res = await fetch('/api/interview-slots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, date, time, duration: parseInt(duration), max_bookings: parseInt(max), location })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Slot created successfully!', 'success');
+      document.getElementById('f-title').value = '';
+      document.getElementById('f-date').value = '';
+      document.getElementById('f-time').value = '';
+      document.getElementById('f-location').value = '';
+      loadSlots();
+    } else {
+      showToast(data.error || 'Failed to create slot', 'error');
+    }
+  }
+
+  async function deleteSlot(id) {
+    if (!confirm('Delete this interview slot? All bookings will be removed.')) return;
+    const res = await fetch(`/api/interview-slots/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Slot deleted', 'success');
+      loadSlots();
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      b.classList.toggle('active', (i === 0 && tab === 'slots') || (i === 1 && tab === 'bookings'));
+    });
+    document.getElementById('slots-section').classList.toggle('hidden', tab !== 'slots');
+    document.getElementById('bookings-section').classList.toggle('active', tab === 'bookings');
+    if (tab === 'bookings') loadBookings();
+  }
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+    t.className = `show ${type}`;
+    setTimeout(() => { t.className = ''; }, 3000);
+  }
+
+  loadSlots();
+</script>
+{% endblock %}

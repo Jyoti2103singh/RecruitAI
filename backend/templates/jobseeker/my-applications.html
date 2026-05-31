@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Applications | AIScreen</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;
+    --border:rgba(255,255,255,0.07);
+    --purple:#7c5cbf;--purple-bright:#9b7de8;--purple-glow:rgba(124,92,191,0.25);
+    --text:#e8e8f0;--muted:#6b6b80;
+    --success:#4ade80;--danger:#f87171;--warn:#fbbf24;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;}
+  .sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 0;position:fixed;left:0;top:0;bottom:0;}
+  .logo{padding:0 20px 28px;font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--purple-bright);}
+  .logo span{color:var(--text);}
+  .nav-section{padding:0 12px;margin-bottom:8px;}
+  .nav-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);padding:0 8px;margin-bottom:6px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--muted);font-size:13.5px;text-decoration:none;transition:all 0.2s;margin-bottom:2px;}
+  .nav-item:hover{background:var(--bg3);color:var(--text);}
+  .nav-item.active{background:var(--purple-glow);color:var(--purple-bright);}
+  .nav-item i{width:16px;text-align:center;font-size:13px;}
+  .sidebar-bottom{margin-top:auto;padding:0 12px;}
+  .logout-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--danger);font-size:13.5px;text-decoration:none;transition:all 0.2s;width:100%;background:none;border:none;cursor:pointer;font-family:inherit;}
+  .logout-btn:hover{background:rgba(248,113,113,0.08);}
+  .main{margin-left:220px;flex:1;padding:40px;}
+  .page-header{margin-bottom:28px;}
+  .page-header h1{font-family:'Space Mono',monospace;font-size:26px;font-weight:700;}
+  .page-header p{color:var(--muted);margin-top:6px;font-size:14px;}
+
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+  .stat-val{font-family:'Space Mono',monospace;font-size:26px;font-weight:700;margin-bottom:4px;}
+  .stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;}
+  .stat-val.purple{color:var(--purple-bright);}
+  .stat-val.green{color:var(--success);}
+  .stat-val.red{color:var(--danger);}
+  .stat-val.yellow{color:var(--warn);}
+
+  .filters{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;align-items:center;}
+  .filter-btn{padding:7px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-family:'DM Sans',sans-serif;transition:all 0.2s;}
+  .filter-btn:hover{border-color:var(--purple);color:var(--purple-bright);}
+  .filter-btn.active{background:var(--purple-glow);border-color:var(--purple);color:var(--purple-bright);}
+
+  .app-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:18px;transition:border-color 0.2s;}
+  .app-card:hover{border-color:var(--purple);}
+  .job-icon{width:46px;height:46px;border-radius:10px;background:var(--purple-glow);display:flex;align-items:center;justify-content:center;color:var(--purple-bright);font-size:18px;flex-shrink:0;}
+  .app-info{flex:1;}
+  .app-title{font-weight:600;font-size:16px;margin-bottom:4px;}
+  .app-company{font-size:13px;color:var(--muted);margin-bottom:6px;}
+  .app-meta{display:flex;gap:16px;flex-wrap:wrap;}
+  .app-meta span{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:5px;}
+
+  .score-circle{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;flex-shrink:0;border:2px solid;}
+  .score-high{border-color:var(--success);color:var(--success);background:rgba(74,222,128,0.08);}
+  .score-mid{border-color:var(--warn);color:var(--warn);background:rgba(251,191,36,0.08);}
+  .score-low{border-color:var(--danger);color:var(--danger);background:rgba(248,113,113,0.08);}
+
+  .status-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0;}
+  .status-badge{font-size:11px;padding:5px 13px;border-radius:20px;font-weight:700;white-space:nowrap;letter-spacing:0.3px;}
+  .status-pending{background:rgba(251,191,36,0.1);color:var(--warn);border:1px solid rgba(251,191,36,0.25);}
+  .status-shortlisted{background:rgba(74,222,128,0.1);color:var(--success);border:1px solid rgba(74,222,128,0.25);}
+  .status-rejected{background:rgba(248,113,113,0.1);color:var(--danger);border:1px solid rgba(248,113,113,0.25);}
+
+  /* Progress timeline */
+  .timeline{display:flex;align-items:center;gap:0;}
+  .tl-step{display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .tl-dot{width:10px;height:10px;border-radius:50%;background:var(--border);border:2px solid var(--muted);}
+  .tl-dot.done{background:var(--purple-bright);border-color:var(--purple-bright);}
+  .tl-dot.current{background:var(--warn);border-color:var(--warn);box-shadow:0 0 6px var(--warn);}
+  .tl-dot.success{background:var(--success);border-color:var(--success);box-shadow:0 0 6px var(--success);}
+  .tl-dot.fail{background:var(--danger);border-color:var(--danger);}
+  .tl-line{width:28px;height:2px;background:var(--border);}
+  .tl-line.done{background:var(--purple-bright);}
+  .tl-label{font-size:9px;color:var(--muted);white-space:nowrap;}
+
+  .empty-state{text-align:center;padding:70px 24px;color:var(--muted);}
+  .empty-state i{font-size:44px;display:block;margin-bottom:16px;opacity:0.15;}
+  .empty-state a{color:var(--purple-bright);text-decoration:none;font-weight:600;}
+
+  .toast{position:fixed;bottom:32px;right:32px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:10px;font-size:13.5px;box-shadow:0 8px 32px rgba(0,0,0,0.4);transform:translateY(80px);opacity:0;transition:all 0.35s cubic-bezier(0.34,1.56,0.64,1);z-index:999;}
+  .toast.show{transform:translateY(0);opacity:1;}
+  .toast.success i{color:var(--success);}
+  .toast.error i{color:var(--danger);}
+
+  .spinner{display:flex;justify-content:center;padding:60px;color:var(--muted);}
+  .spinner i{animation:spin 1s linear infinite;font-size:28px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">AI<span>Screen</span></div>
+  <div class="nav-section">
+    <div class="nav-label">Main</div>
+    <a href="/jobseeker/dashboard" class="nav-item"><i class="fas fa-th-large"></i> Dashboard</a>
+    <a href="/jobseeker/jobs" class="nav-item"><i class="fas fa-briefcase"></i> Browse Jobs</a>
+    <a href="/jobseeker/my-applications" class="nav-item active"><i class="fas fa-inbox"></i> My Applications</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Tools</div>
+    <a href="/ai-interviewer" class="nav-item"><i class="fas fa-robot"></i> AI Interviewer</a>
+    <a href="/analytics" class="nav-item"><i class="fas fa-chart-pie"></i> Analytics</a>
+    <a href="/history" class="nav-item"><i class="fas fa-history"></i> History</a>
+  </div>
+  <div class="sidebar-bottom">
+    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="page-header">
+    <h1>My Applications</h1>
+    <p>Track the status of all your job applications</p>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val purple" id="statTotal">0</div><div class="stat-label">Total Applied</div></div>
+    <div class="stat-card"><div class="stat-val yellow" id="statPending">0</div><div class="stat-label">Under Review</div></div>
+    <div class="stat-card"><div class="stat-val green" id="statShortlisted">0</div><div class="stat-label">Shortlisted</div></div>
+    <div class="stat-card"><div class="stat-val red" id="statRejected">0</div><div class="stat-label">Rejected</div></div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+    <button class="filter-btn" onclick="setFilter('pending',this)">Under Review</button>
+    <button class="filter-btn" onclick="setFilter('shortlisted',this)">Shortlisted</button>
+    <button class="filter-btn" onclick="setFilter('rejected',this)">Rejected</button>
+  </div>
+
+  <div id="appsList"><div class="spinner"><i class="fas fa-spinner"></i></div></div>
+</main>
+
+<div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg"></span></div>
+
+<script>
+  var allApps = [];
+  var currentFilter = 'all';
+
+  function scoreClass(s) {
+    if (s >= 70) return 'score-high';
+    if (s >= 40) return 'score-mid';
+    return 'score-low';
+  }
+
+  function statusBadge(s) {
+    var labels = {pending:'Under Review', shortlisted:'Shortlisted ✓', rejected:'Not Selected'};
+    return '<span class="status-badge status-' + s + '">' + (labels[s] || s) + '</span>';
+  }
+
+  function timeline(status) {
+    var steps = ['Applied', 'Reviewed', 'Decision'];
+    var dotClass = ['done', 'done', 'done'];
+    if (status === 'pending') { dotClass = ['done', 'current', '']; }
+    else if (status === 'shortlisted') { dotClass = ['done', 'done', 'success']; }
+    else if (status === 'rejected') { dotClass = ['done', 'done', 'fail']; }
+
+    var html = '<div class="timeline">';
+    for (var i = 0; i < steps.length; i++) {
+      html += '<div class="tl-step"><div class="tl-dot ' + dotClass[i] + '"></div><div class="tl-label">' + steps[i] + '</div></div>';
+      if (i < steps.length - 1) {
+        html += '<div class="tl-line ' + (dotClass[i] === 'done' ? 'done' : '') + '"></div>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    render();
+  }
+
+  function render() {
+    var filtered = allApps.filter(function(a) {
+      return currentFilter === 'all' || a.status === currentFilter;
+    });
+    var container = document.getElementById('appsList');
+    if (!filtered.length) {
+      container.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p>No applications here.<br><a href="/jobseeker/jobs">Browse Jobs</a> to apply!</p></div>';
+      return;
+    }
+    container.innerHTML = filtered.map(function(a) {
+      var score = a.ats_score || 0;
+      return '<div class="app-card">' +
+        '<div class="job-icon"><i class="fas fa-briefcase"></i></div>' +
+        '<div class="app-info">' +
+          '<div class="app-title">' + (a.job_title || 'Job') + '</div>' +
+          '<div class="app-company">' + (a.company || '') + (a.location ? ' &bull; ' + a.location : '') + '</div>' +
+          '<div class="app-meta">' +
+            '<span><i class="fas fa-calendar"></i>' + (a.created_at || '').slice(0,10) + '</span>' +
+            (a.cover_note ? '<span><i class="fas fa-comment"></i>Cover note submitted</span>' : '') +
+            (a.portfolio_url ? '<span><i class="fas fa-link"></i><a href="' + a.portfolio_url + '" target="_blank" style="color:var(--purple-bright)">Portfolio</a></span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="score-circle ' + scoreClass(score) + '">' + score + '</div>' +
+        '<div class="status-wrap">' +
+          statusBadge(a.status || 'pending') +
+          timeline(a.status || 'pending') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function updateStats() {
+    document.getElementById('statTotal').textContent = allApps.length;
+    document.getElementById('statPending').textContent = allApps.filter(function(a){return (a.status||'pending')==='pending';}).length;
+    document.getElementById('statShortlisted').textContent = allApps.filter(function(a){return a.status==='shortlisted';}).length;
+    document.getElementById('statRejected').textContent = allApps.filter(function(a){return a.status==='rejected';}).length;
+  }
+
+  fetch('/api/my-applications')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      allApps = data;
+      updateStats();
+      render();
+    })
+    .catch(function(){
+      document.getElementById('appsList').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Could not load applications. Please refresh.</p></div>';
+    });
+</script>
+</body>
+</html>

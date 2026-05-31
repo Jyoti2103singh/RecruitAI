@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>History | Resume Screening</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+  :root {
+    --bg:#0d0f14;--surface:#151820;--surface2:#1c2030;--border:#252a38;
+    --accent:#4fffb0;--accent2:#7c6fff;--accent3:#ff6b6b;--accent4:#ffca3a;
+    --text:#e8eaf0;--muted:#6b7280;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+  .sidebar{position:fixed;top:0;left:0;width:220px;height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 0;z-index:100;}
+  .sidebar-logo{padding:0 20px 24px;font-size:18px;font-weight:800;color:var(--accent);letter-spacing:-0.5px;border-bottom:1px solid var(--border);}
+  .sidebar-logo span{color:var(--text);}
+  .nav-links{padding:16px 12px;flex:1;}
+  .nav-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.2s;margin-bottom:2px;}
+  .nav-link:hover{background:var(--surface2);color:var(--text);}
+  .nav-link.active{background:rgba(79,255,176,0.1);color:var(--accent);}
+  .nav-link .icon{font-size:16px;width:20px;text-align:center;}
+  .main{margin-left:220px;padding:32px;}
+  .page-header{margin-bottom:28px;}
+  .page-header h1{font-size:32px;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,var(--text) 0%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .page-header p{color:var(--muted);font-size:13px;margin-top:4px;font-family:'DM Mono',monospace;}
+
+  .filter-bar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+  .filter-btn{padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}
+  .filter-btn:hover,.filter-btn.active{background:rgba(79,255,176,0.1);color:var(--accent);border-color:rgba(79,255,176,0.3);}
+  .search-input{flex:1;min-width:200px;padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;}
+  .search-input:focus{border-color:rgba(79,255,176,0.4);}
+  .search-input::placeholder{color:var(--muted);}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:0;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;padding:12px 16px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;border-bottom:1px solid var(--border);background:var(--surface2);}
+  td{padding:14px 16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.03);}
+  tr:last-child td{border-bottom:none;}
+  tr{transition:background 0.15s;}
+  tr:hover td{background:rgba(255,255,255,0.02);}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;text-transform:uppercase;}
+  .badge.shortlisted{background:rgba(79,255,176,0.12);color:var(--accent);}
+  .badge.rejected{background:rgba(255,107,107,0.12);color:var(--accent3);}
+  .badge.pending{background:rgba(255,202,58,0.12);color:var(--accent4);}
+  .badge.hired{background:rgba(124,111,255,0.12);color:var(--accent2);}
+  .score-pill{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;padding:3px 8px;border-radius:6px;}
+  .score-high{color:var(--accent);background:rgba(79,255,176,0.1);}
+  .score-mid{color:var(--accent4);background:rgba(255,202,58,0.1);}
+  .score-low{color:var(--accent3);background:rgba(255,107,107,0.1);}
+  .skills-tags{display:flex;gap:4px;flex-wrap:wrap;}
+  .skill-tag{font-size:10px;padding:2px 7px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--muted);font-family:'DM Mono',monospace;}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+  .empty-state .big{font-size:48px;margin-bottom:12px;}
+  .empty-state p{font-family:'DM Mono',monospace;font-size:13px;}
+  .row-count{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:12px;}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="sidebar-logo">AI<span>Screen</span></div>
+  <div class="nav-links">
+    <a href="/dashboard" class="nav-link"><span class="icon">⊞</span> Dashboard</a>
+    <a href="/upload" class="nav-link"><span class="icon">↑</span> Upload</a>
+    <a href="/candidates" class="nav-link"><span class="icon">◉</span> Candidates</a>
+    <a href="/results" class="nav-link"><span class="icon">≡</span> Results</a>
+    <a href="/analytics" class="nav-link"><span class="icon">◈</span> Analytics</a>
+    <a href="/history" class="nav-link active"><span class="icon">◷</span> History</a>
+    <a href="/ai-interviewer" class="nav-link"><span class="icon">◎</span> AI Interviewer</a>
+    <a href="/compare-candidates" class="nav-link"><span class="icon">⇄</span> Compare</a>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="page-header">
+    <h1>Screening History</h1>
+    <p>All resumes screened — last 50 records</p>
+  </div>
+
+  <div class="filter-bar">
+    <input class="search-input" type="text" id="search" placeholder="Search by name or email...">
+    <button class="filter-btn active" onclick="filterBy('all', this)">All</button>
+    <button class="filter-btn" onclick="filterBy('shortlisted', this)">Shortlisted</button>
+    <button class="filter-btn" onclick="filterBy('pending', this)">Pending</button>
+    <button class="filter-btn" onclick="filterBy('rejected', this)">Rejected</button>
+    <button class="filter-btn" onclick="filterBy('hired', this)">Hired</button>
+  </div>
+
+  <div class="row-count" id="row-count"></div>
+
+  <div class="card">
+    {% if history %}
+    <table id="history-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Skills</th>
+          <th>Score</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in history %}
+        <tr data-status="{{ c.status or 'pending' }}" data-name="{{ (c.name or '')|lower }}" data-email="{{ (c.email or '')|lower }}">
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">{{ loop.index }}</td>
+          <td style="font-weight:600">{{ c.name or 'Unknown' }}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">{{ c.email or '—' }}</td>
+          <td>
+            <div class="skills-tags">
+              {% if c.skills_json %}
+                {% for skill in c.skills_json[:4] %}
+                  <span class="skill-tag">{{ skill }}</span>
+                {% endfor %}
+                {% if c.skills_json|length > 4 %}
+                  <span class="skill-tag">+{{ c.skills_json|length - 4 }}</span>
+                {% endif %}
+              {% else %}
+                <span style="color:var(--muted);font-size:12px">—</span>
+              {% endif %}
+            </div>
+          </td>
+          <td>
+            {% set score = c.score or 0 %}
+            <span class="score-pill {% if score >= 70 %}score-high{% elif score >= 40 %}score-mid{% else %}score-low{% endif %}">
+              {{ score }}
+            </span>
+          </td>
+          <td><span class="badge {{ c.status or 'pending' }}">{{ c.status or 'pending' }}</span></td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">
+            {{ (c.created_at or '')[:10] or '—' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="big">◷</div>
+      <p>No screening history yet.</p>
+      <p style="margin-top:8px"><a href="/upload" style="color:var(--accent)">Upload a resume</a> to get started.</p>
+    </div>
+    {% endif %}
+  </div>
+</main>
+
+<script>
+  let currentFilter = 'all';
+
+  function filterBy(status, btn) {
+    currentFilter = status;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilters();
+  }
+
+  document.getElementById('search').addEventListener('input', applyFilters);
+
+  function applyFilters() {
+    const search = document.getElementById('search').value.toLowerCase();
+    const rows = document.querySelectorAll('#history-table tbody tr');
+    let visible = 0;
+    rows.forEach(row => {
+      const name = row.dataset.name || '';
+      const email = row.dataset.email || '';
+      const status = row.dataset.status || '';
+      const matchStatus = currentFilter === 'all' || status === currentFilter;
+      const matchSearch = !search || name.includes(search) || email.includes(search);
+      if (matchStatus && matchSearch) {
+        row.style.display = '';
+        visible++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    document.getElementById('row-count').textContent = `Showing ${visible} record${visible !== 1 ? 's' : ''}`;
+  }
+
+  // Init count
+  applyFilters();
+</script>
+</body>
+</html>

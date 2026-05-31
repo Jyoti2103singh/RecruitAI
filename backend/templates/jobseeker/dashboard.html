@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Seeker Dashboard | AIScreen</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a2a3d;
+      --accent: #7c6af5;
+      --accent2: #f5a623;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e8e8f0;
+      --muted: #6b6b8a;
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-display);
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      width: 220px; height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 24px 0; z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 1.2rem; font-weight: 800;
+      letter-spacing: -0.5px;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .sidebar-logo span { color: var(--text); }
+    .sidebar-nav { flex: 1; padding: 16px 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px;
+      font-size: 0.85rem; font-weight: 600;
+      color: var(--muted);
+      cursor: pointer; text-decoration: none;
+      transition: all 0.15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { color: var(--text); background: var(--surface2); }
+    .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(124,106,245,0.08); }
+    .nav-item .icon { width: 18px; text-align: center; font-size: 1rem; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+    .user-badge {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.8rem;
+    }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--accent); display: flex;
+      align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem; color: #fff;
+    }
+    .logout-btn {
+      display: block; margin-top: 10px;
+      padding: 8px; text-align: center;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 6px;
+      font-size: 0.75rem; cursor: pointer; text-decoration: none;
+      transition: all 0.15s;
+    }
+    .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── MAIN ── */
+    .main { margin-left: 220px; padding: 32px; min-height: 100vh; }
+
+    .page-header {
+      margin-bottom: 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .page-title { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
+    .page-title span { color: var(--accent); }
+
+    /* ── TABS ── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 28px; }
+    .tab-btn {
+      padding: 8px 18px; border-radius: 8px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); font-family: var(--font-display);
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); border-color: var(--accent); }
+    .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px; margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 700; margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    /* ── UPLOAD ZONE ── */
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 40px 20px; text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: rgba(124,106,245,0.04); }
+    .upload-zone input[type=file] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .upload-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .upload-text { font-size: 0.95rem; color: var(--muted); }
+    .upload-text strong { color: var(--accent); }
+
+    /* ── SCORE DISPLAY ── */
+    .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 20px; }
+    .score-box {
+      background: var(--surface2); border-radius: 10px; padding: 20px;
+      text-align: center;
+    }
+    .score-number { font-size: 2.2rem; font-weight: 800; font-family: var(--font-mono); }
+    .score-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .score-high { color: var(--green); }
+    .score-mid { color: var(--yellow); }
+    .score-low { color: var(--red); }
+
+    /* ── PROGRESS BAR ── */
+    .progress-bar-wrap { background: var(--surface2); border-radius: 99px; height: 8px; overflow: hidden; margin: 8px 0; }
+    .progress-bar { height: 100%; border-radius: 99px; background: var(--accent); transition: width 0.8s ease; }
+
+    /* ── SKILLS TAGS ── */
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .tag {
+      padding: 4px 12px; border-radius: 20px; font-size: 0.75rem;
+      font-family: var(--font-mono); font-weight: 500;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .tag.match { background: rgba(34,197,94,0.12); border-color: var(--green); color: var(--green); }
+    .tag.missing { background: rgba(239,68,68,0.1); border-color: var(--red); color: var(--red); }
+
+    /* ── AI FEEDBACK ── */
+    .feedback-section { margin-top: 16px; }
+    .feedback-item {
+      padding: 12px 16px; border-radius: 8px;
+      background: var(--surface2); margin-bottom: 8px;
+      font-size: 0.85rem; line-height: 1.6; color: var(--text);
+      border-left: 3px solid var(--border);
+    }
+    .feedback-item.strength { border-left-color: var(--green); }
+    .feedback-item.improve { border-left-color: var(--yellow); }
+
+    /* ── JOB CARDS ── */
+    .job-grid { display: grid; gap: 16px; }
+    .job-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+      transition: border-color 0.15s;
+    }
+    .job-card:hover { border-color: var(--accent); }
+    .job-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .job-title { font-size: 1.05rem; font-weight: 700; }
+    .job-company { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .job-meta { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+    .job-meta span {
+      font-size: 0.75rem; color: var(--muted);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .badge {
+      padding: 3px 10px; border-radius: 20px; font-size: 0.72rem;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-active { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-pending { background: rgba(245,158,11,0.15); color: var(--yellow); }
+    .badge-shortlisted { background: rgba(124,106,245,0.2); color: var(--accent); }
+    .badge-rejected { background: rgba(239,68,68,0.1); color: var(--red); }
+
+    .btn {
+      padding: 9px 20px; border-radius: 8px; font-size: 0.82rem;
+      font-weight: 600; font-family: var(--font-display);
+      cursor: pointer; border: none; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #6b5ae0; }
+    .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+    .btn-outline {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── APPLY MODAL ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 28px; width: 100%; max-width: 480px;
+      margin: 16px;
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; display: block; }
+    textarea, input[type=text], input[type=url] {
+      width: 100%; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; color: var(--text);
+      font-family: var(--font-display); font-size: 0.85rem;
+      resize: vertical; outline: none; transition: border-color 0.15s;
+    }
+    textarea:focus, input:focus { border-color: var(--accent); }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+    /* ── SPINNER ── */
+    .spinner {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── EMPTY STATE ── */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state .emoji { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.9rem; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 12px 20px; border-radius: 10px;
+      font-size: 0.85rem; font-weight: 600; z-index: 999;
+      transform: translateY(80px); opacity: 0; transition: all 0.3s;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error { border-color: var(--red); color: var(--red); }
+
+    /* ── MY APPLICATIONS TIMELINE ── */
+    .app-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; margin-bottom: 14px;
+    }
+    .app-timeline {
+      display: flex; gap: 0; margin-top: 14px; align-items: center;
+    }
+    .timeline-step {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      position: relative;
+    }
+    .timeline-step:not(:last-child)::after {
+      content: ''; position: absolute; top: 14px; left: 50%;
+      width: 100%; height: 2px; background: var(--border); z-index: 0;
+    }
+    .timeline-step.done:not(:last-child)::after { background: var(--accent); }
+    .step-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--surface2); border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; z-index: 1; position: relative;
+      transition: all 0.3s;
+    }
+    .timeline-step.done .step-dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .timeline-step.current .step-dot { border-color: var(--accent2); color: var(--accent2); }
+    .step-label { font-size: 0.68rem; color: var(--muted); margin-top: 6px; text-align: center; }
+    .timeline-step.done .step-label { color: var(--text); }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">AI<span>Screen</span></div>
+  <div class="sidebar-nav">
+    <a class="nav-item active" onclick="showTab('resume')">
+      <span class="icon">📄</span> My Resume
+    </a>
+    <a class="nav-item" onclick="showTab('jobs')">
+      <span class="icon">💼</span> Browse Jobs
+    </a>
+    <a class="nav-item" onclick="showTab('applications')">
+      <span class="icon">📋</span> My Applications
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-badge">
+      <div class="user-avatar" id="userAvatarInitial">?</div>
+      <div>
+        <div style="font-size:0.8rem; font-weight:600;" id="userDisplayName">—</div>
+        <div style="font-size:0.7rem; color:var(--muted)">Job Seeker</div>
+      </div>
+    </div>
+    <a href="/logout" class="logout-btn">↩ Logout</a>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="page-header">
+    <div class="page-title">Job Seeker <span>Dashboard</span></div>
+    <div style="position:relative;">
+      <button class="notif-btn" onclick="toggleNotifications()" id="notifBtn"
+        style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:1rem;position:relative;">
+        🔔
+        <div id="notifDot" style="display:none;position:absolute;top:4px;right:4px;width:8px;height:8px;background:var(--red);border-radius:50%;"></div>
+      </button>
+      <div id="notifPanel" style="display:none;position:fixed;top:70px;right:32px;width:340px;background:var(--surface);border:1px solid var(--border);border-radius:14px;z-index:500;box-shadow:0 20px 60px rgba(0,0,0,0.5);max-height:440px;overflow-y:auto;">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:0.95rem;font-weight:700;">🔔 Notifications</div>
+          <button onclick="markAllRead()" style="font-size:0.75rem;color:var(--accent);background:none;border:none;cursor:pointer;">Mark all read</button>
+        </div>
+        <div id="notifList"><div style="padding:40px 20px;text-align:center;color:var(--muted);font-size:0.85rem;">No notifications yet</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('resume')">📄 My Resume</button>
+    <button class="tab-btn" onclick="showTab('jobs')">💼 Browse Jobs</button>
+    <button class="tab-btn" onclick="showTab('applications')">📋 My Applications</button>
+  </div>
+
+  <!-- ── TAB: RESUME ── -->
+  <div class="tab-content active" id="tab-resume">
+    <div class="card">
+      <div class="card-title">Upload Your Resume</div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('resumeFile').click()">
+        <input type="file" id="resumeFile" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="fileSelected(this)">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text" id="uploadText">
+          <strong>Click to upload</strong> or drag & drop<br>
+          PDF, DOCX, DOC, TXT supported
+        </div>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="screenBtn" onclick="screenResume()">
+          ⚡ Screen Resume
+        </button>
+        <span id="uploadStatus" style="font-size:0.82rem; color:var(--muted); align-self:center;"></span>
+      </div>
+    </div>
+
+    <!-- Score Results -->
+    <div class="card" id="resultsCard" style="display:none;">
+      <div class="card-title">ATS Score Results</div>
+      <div class="score-grid">
+        <div class="score-box">
+          <div class="score-number" id="atsScore">—</div>
+          <div class="score-label">ATS Score</div>
+        </div>
+        <div class="score-box">
+          <div class="score-number" id="expScore">—</div>
+          <div class="score-label">Experience</div>
+        </div>
+        <div class="score-box">
+          <div class="score-number" id="skillScore">—</div>
+          <div class="score-label">Skills</div>
+        </div>
+        <div class="score-box">
+          <div class="score-number" id="eduScore">—</div>
+          <div class="score-label">Education</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <div style="font-size:0.82rem; color:var(--muted); margin-bottom:6px;">Overall Progress</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="progressBar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <div style="font-size:0.85rem; font-weight:600; margin-bottom:8px;">Detected Skills</div>
+        <div class="tags" id="skillTags"></div>
+      </div>
+    </div>
+
+    <!-- AI Feedback -->
+    <div class="card" id="feedbackCard" style="display:none;">
+      <div class="card-title">🤖 AI Feedback</div>
+      <div class="feedback-section" id="feedbackContent"></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: JOBS ── -->
+  <div class="tab-content" id="tab-jobs">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div style="font-size:0.9rem; color:var(--muted);" id="jobCount">Loading jobs…</div>
+    </div>
+    <div class="job-grid" id="jobGrid">
+      <div class="empty-state"><div class="emoji">⏳</div><p>Loading jobs…</p></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: MY APPLICATIONS ── -->
+  <div class="tab-content" id="tab-applications">
+    <div id="myAppsList">
+      <div class="empty-state"><div class="emoji">⏳</div><p>Loading…</p></div>
+    </div>
+  </div>
+</main>
+
+<!-- APPLY MODAL -->
+<div class="modal-overlay" id="applyModal">
+  <div class="modal">
+    <div class="modal-title">Apply for <span id="modalJobTitle">this job</span></div>
+    <div class="form-group">
+      <label class="form-label">Cover Note (optional)</label>
+      <textarea id="coverNote" rows="4" placeholder="Tell the recruiter why you're a great fit…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Portfolio / LinkedIn URL (optional)</label>
+      <input type="url" id="portfolioUrl" placeholder="https://linkedin.com/in/yourprofile">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="submitApplyBtn" onclick="submitApplication()">Submit Application</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── STATE ──
+  let currentUser = null;
+  let screeningResult = null;
+  let currentJobId = null;
+  let appliedJobs = new Set();
+
+  // ── INIT ──
+  window.addEventListener('DOMContentLoaded', async () => {
+    try { await fetchCurrentUser(); } catch(e) { console.warn('me failed', e); }
+    await loadAppliedJobs();
+    loadJobs();
+    loadMyApplications();
+  loadNotifications();
+  });
+
+  async function fetchCurrentUser() {
+    try {
+      const res = await fetch('/api/me');
+      if (res.ok) {
+        const data = await res.json();
+        currentUser = data.username;
+        document.getElementById('userDisplayName').textContent = currentUser;
+        document.getElementById('userAvatarInitial').textContent = currentUser.charAt(0).toUpperCase();
+      }
+    } catch (e) {
+      console.warn('Could not fetch user info', e);
+    }
+  }
+
+  async function loadAppliedJobs() {
+    try {
+      const res = await fetch('/api/my-applications');
+      if (res.ok) {
+        const apps = await res.json();
+        apps.forEach(a => appliedJobs.add(a.job_id));
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // ── TABS ──
+  function showTab(name) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    document.getElementById('tab-' + name).classList.add('active');
+
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      if (b.textContent.toLowerCase().includes(name === 'resume' ? 'resume' : name === 'jobs' ? 'browse' : 'application')) {
+        b.classList.add('active');
+      }
+    });
+    document.querySelectorAll('.nav-item').forEach(n => {
+      if (n.textContent.toLowerCase().includes(name === 'resume' ? 'resume' : name === 'jobs' ? 'browse' : 'application')) {
+        n.classList.add('active');
+      }
+    });
+
+    if (name === 'applications') loadMyApplications();
+    if (name === 'jobs') loadJobs();
+  }
+
+  // ── FILE SELECTED ──
+  function fileSelected(input) {
+    if (input.files && input.files[0]) {
+      document.getElementById('uploadText').innerHTML = 
+        '<strong style="color:var(--green)">✅ ' + input.files[0].name + '</strong><br><span style="font-size:0.75rem">Click Screen Resume to analyze</span>';
+    }
+  }
+
+  // ── SCREEN RESUME ──
+  async function screenResume() {
+    const file = document.getElementById('resumeFile').files[0];
+    if (!file) {
+      showToast('Please select a resume file first.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('screenBtn');
+    const status = document.getElementById('uploadStatus');
+    btn.innerHTML = '<span class="spinner"></span> Analyzing…';
+    btn.disabled = true;
+    status.textContent = 'Uploading & screening…';
+
+    const formData = new FormData();
+    formData.append('resume', file);
+
+    try {
+      formData.append('job_role', 'General Role');
+      formData.append('job_role', 'General Role');
+      const res = await fetch('/jobseeker/submit-resume', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.error) {
+        showToast(data.error, 'error');
+        return;
+      }
+
+      screeningResult = data;
+      displayResults(data);
+      showToast('Resume screened successfully!', 'success');
+    } catch (e) {
+      showToast('Failed to screen resume. Check the server.', 'error');
+      console.error(e);
+    } finally {
+      btn.innerHTML = '⚡ Screen Resume';
+      btn.disabled = false;
+      status.textContent = '';
+    }
+  }
+
+  function displayResults(data) {
+    document.getElementById('resultsCard').style.display = 'block';
+    document.getElementById('feedbackCard').style.display = 'block';
+
+    const ats = data.ats_score || data.score || 0;
+    const colorClass = ats >= 70 ? 'score-high' : ats >= 45 ? 'score-mid' : 'score-low';
+
+    document.getElementById('atsScore').textContent = ats;
+    document.getElementById('atsScore').className = 'score-number ' + colorClass;
+    document.getElementById('expScore').textContent = data.experience_score || '—';
+    document.getElementById('skillScore').textContent = data.skills_score || '—';
+    document.getElementById('eduScore').textContent = data.education_score || '—';
+    document.getElementById('progressBar').style.width = ats + '%';
+
+    // Skills — handle both string and array
+    const skillTags = document.getElementById('skillTags');
+    skillTags.innerHTML = '';
+    let skills = data.skills || data.matched_skills || [];
+
+    if (typeof skills === 'string') {
+      try { skills = JSON.parse(skills); } catch (e) { skills = skills.split(',').map(s => s.trim()).filter(Boolean); }
+    }
+
+    if (Array.isArray(skills) && skills.length) {
+      skills.forEach(skill => {
+        const tag = document.createElement('span');
+        tag.className = 'tag match';
+        tag.textContent = skill;
+        skillTags.appendChild(tag);
+      });
+    } else {
+      skillTags.innerHTML = '<span class="tag">No skills detected</span>';
+    }
+
+    // Missing skills
+    let missing = data.missing_skills || [];
+    if (typeof missing === 'string') {
+      try { missing = JSON.parse(missing); } catch (e) { missing = missing.split(',').map(s => s.trim()).filter(Boolean); }
+    }
+    if (Array.isArray(missing) && missing.length) {
+      missing.forEach(skill => {
+        const tag = document.createElement('span');
+        tag.className = 'tag missing';
+        tag.textContent = '✗ ' + skill;
+        skillTags.appendChild(tag);
+      });
+    }
+
+    // AI Feedback
+    const feedbackEl = document.getElementById('feedbackContent');
+    feedbackEl.innerHTML = '';
+
+    const strengths = data.strengths || data.ai_feedback?.strengths || [];
+    const improvements = data.improvements || data.ai_feedback?.improvements || [];
+    const feedback = data.feedback || data.ai_feedback?.feedback || data.summary || '';
+
+    if (strengths.length) {
+      strengths.forEach(s => {
+        feedbackEl.innerHTML += `<div class="feedback-item strength">💪 ${s}</div>`;
+      });
+    }
+    if (improvements.length) {
+      improvements.forEach(s => {
+        feedbackEl.innerHTML += `<div class="feedback-item improve">💡 ${s}</div>`;
+      });
+    }
+    if (feedback && !strengths.length && !improvements.length) {
+      feedbackEl.innerHTML = `<div class="feedback-item">${feedback}</div>`;
+    }
+    if (!strengths.length && !improvements.length && !feedback) {
+      feedbackEl.innerHTML = '<div class="feedback-item">No AI feedback available for this resume.</div>';
+    }
+  }
+
+  // ── LOAD JOBS ──
+  async function loadJobs() {
+    const grid = document.getElementById('jobGrid');
+    grid.innerHTML = '<div class="empty-state"><div class="emoji">⏳</div><p>Loading jobs…</p></div>';
+
+    try {
+      const res = await fetch('/api/jobs');
+      const jobs = await res.json();
+
+      document.getElementById('jobCount').textContent = `${jobs.length} job${jobs.length !== 1 ? 's' : ''} available`;
+
+      if (!jobs.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="emoji">🔍</div><p>No jobs posted yet.</p></div>';
+        return;
+      }
+
+      grid.innerHTML = '';
+      jobs.forEach(job => renderJobCard(job, grid));
+    } catch (e) {
+      grid.innerHTML = '<div class="empty-state"><div class="emoji">❌</div><p>Failed to load jobs.</p></div>';
+    }
+  }
+
+  function renderJobCard(job, container) {
+    let skills = job.skills || [];
+    if (typeof skills === 'string') {
+      try { skills = JSON.parse(skills); } catch (e) { skills = skills.split(',').map(s => s.trim()).filter(Boolean); }
+    }
+
+    const isApplied = appliedJobs.has(job.id);
+
+    const card = document.createElement('div');
+    card.className = 'job-card';
+    card.innerHTML = `
+      <div class="job-header">
+        <div>
+          <div class="job-title">${escHtml(job.title)}</div>
+          <div class="job-company">${escHtml(job.company || '')}</div>
+        </div>
+        <span class="badge badge-active">Active</span>
+      </div>
+      <div class="job-meta">
+        ${job.location ? `<span>📍 ${escHtml(job.location)}</span>` : ''}
+        ${job.job_type ? `<span>⏱ ${escHtml(job.job_type)}</span>` : ''}
+        ${job.salary ? `<span>💰 ${escHtml(job.salary)}</span>` : ''}
+        ${job.experience ? `<span>🎯 ${escHtml(job.experience)}</span>` : ''}
+      </div>
+      ${job.description ? `<div style="font-size:0.82rem; color:var(--muted); margin:8px 0; line-height:1.5;">${escHtml(job.description).substring(0,160)}…</div>` : ''}
+      <div class="tags" style="margin-bottom:14px;">
+        ${skills.map(s => `<span class="tag">${escHtml(s)}</span>`).join('')}
+      </div>
+      <button class="btn ${isApplied ? 'btn-outline' : 'btn-primary'}"
+        id="apply-btn-${job.id}"
+        onclick="${isApplied ? '' : `openApplyModal(${job.id}, '${escHtml(job.title).replace(/'/g, "\\'")}' )`}"
+        ${isApplied ? 'disabled' : ''}>
+        ${isApplied ? '✅ Applied' : '📨 Apply Now'}
+      </button>
+    `;
+    container.appendChild(card);
+  }
+
+  // ── APPLY MODAL ──
+  function openApplyModal(jobId, jobTitle) {
+    currentJobId = jobId;
+    document.getElementById('modalJobTitle').textContent = jobTitle;
+    document.getElementById('coverNote').value = '';
+    document.getElementById('portfolioUrl').value = '';
+    document.getElementById('applyModal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('applyModal').classList.remove('open');
+    currentJobId = null;
+  }
+
+  async function submitApplication() {
+    if (!currentJobId) return;
+
+    const btn = document.getElementById('submitApplyBtn');
+    btn.innerHTML = '<span class="spinner"></span> Submitting…';
+    btn.disabled = true;
+
+    const payload = {
+      cover_note: document.getElementById('coverNote').value.trim(),
+      portfolio_url: document.getElementById('portfolioUrl').value.trim(),
+      ats_score: screeningResult ? (screeningResult.ats_score || screeningResult.score || 0) : 0
+    };
+
+    try {
+      const res = await fetch(`/api/jobs/${currentJobId}/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success || data.message) {
+        appliedJobs.add(currentJobId);
+        const applyBtn = document.getElementById(`apply-btn-${currentJobId}`);
+        if (applyBtn) {
+          applyBtn.textContent = '✅ Applied';
+          applyBtn.disabled = true;
+          applyBtn.className = 'btn btn-outline';
+          applyBtn.onclick = null;
+        }
+        closeModal();
+        showToast('Application submitted!', 'success');
+        loadMyApplications();
+      } else {
+        showToast(data.error || 'Failed to apply. Try again.', 'error');
+      }
+    } catch (e) {
+      showToast('Network error. Check your connection.', 'error');
+    } finally {
+      btn.innerHTML = 'Submit Application';
+      btn.disabled = false;
+    }
+  }
+
+  // ── MY APPLICATIONS ──
+  async function loadMyApplications() {
+    const list = document.getElementById('myAppsList');
+    list.innerHTML = '<div class="empty-state"><div class="emoji">⏳</div><p>Loading…</p></div>';
+
+    try {
+      const res = await fetch('/api/my-applications');
+      const apps = await res.json();
+
+      if (!apps.length) {
+        list.innerHTML = '<div class="empty-state"><div class="emoji">📭</div><p>You haven\'t applied to any jobs yet.<br>Browse jobs and apply!</p></div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      apps.forEach(app => {
+        const steps = ['Applied', 'Reviewing', 'Shortlisted', 'Interview', 'Offer'];
+        const statusMap = {
+          pending: 1, reviewing: 2, shortlisted: 3, interview: 4, offer: 5, rejected: 1
+        };
+        const currentStep = statusMap[app.status] || 1;
+
+        const card = document.createElement('div');
+        card.className = 'app-card';
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-weight:700; font-size:1rem;">${escHtml(app.job_title || 'Unknown Job')}</div>
+              <div style="font-size:0.8rem; color:var(--muted); margin-top:2px;">
+                ${escHtml(app.company || '')} ${app.location ? '· ' + escHtml(app.location) : ''}
+              </div>
+            </div>
+            <span class="badge badge-${app.status === 'shortlisted' ? 'shortlisted' : app.status === 'rejected' ? 'rejected' : 'pending'}">
+              ${app.status || 'Pending'}
+            </span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--muted); margin-top:6px;">
+            Applied ${formatDate(app.created_at)}
+            ${app.ats_score ? ` · ATS Score: <span style="color:var(--accent)">${app.ats_score}</span>` : ''}
+            ${app.ai_match_score ? ` · AI Match: <span style="color:${app.ai_match_score>=70?'var(--green)':app.ai_match_score>=45?'var(--yellow)':'var(--red)'}">${app.ai_match_score}%</span>` : ''}
+            ${app.ai_match_summary ? `<div style="margin-top:6px;font-size:0.78rem;color:var(--muted);font-style:italic;">${app.ai_match_summary}</div>` : ''}
+          </div>
+          ${app.status === 'rejected' ? `
+          <div style="margin-top:12px; padding:10px 14px; background:rgba(239,68,68,0.08); border-radius:8px; border-left:3px solid var(--red); font-size:0.82rem; color:var(--muted);">
+            ❌ Application was not selected this time. Keep applying!
+          </div>` : `
+          <div class="app-timeline">
+            ${steps.map((s, i) => `
+              <div class="timeline-step ${i + 1 <= currentStep ? 'done' : i + 1 === currentStep + 1 ? 'current' : ''}">
+                <div class="step-dot">${i + 1 <= currentStep ? '✓' : i + 1}</div>
+                <div class="step-label">${s}</div>
+              </div>
+            `).join('')}
+          </div>`}
+        `;
+        list.appendChild(card);
+      });
+    } catch (e) {
+      list.innerHTML = '<div class="empty-state"><div class="emoji">❌</div><p>Failed to load applications.</p></div>';
+    }
+  }
+
+  // ── NOTIFICATIONS ──
+  async function loadNotifications() {
+    try {
+      const res = await fetch('/api/notifications');
+      const notifs = await res.json();
+      const unread = notifs.filter(n => !n.is_read).length;
+      document.getElementById('notifDot').style.display = unread > 0 ? 'block' : 'none';
+      const list = document.getElementById('notifList');
+      if (!notifs.length) {
+        list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--muted);font-size:0.85rem;">No notifications yet</div>';
+        return;
+      }
+      list.innerHTML = notifs.map(n => `
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:${n.is_read?'':'rgba(124,106,245,0.06)'};">
+          <div style="font-size:0.85rem;font-weight:600;margin-bottom:3px;">${n.title}</div>
+          <div style="font-size:0.78rem;color:var(--muted);line-height:1.4;">${n.body}</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:4px;font-family:var(--font-mono);">${formatDate(n.created_at)}</div>
+        </div>
+      `).join('');
+    } catch(e) { console.warn('Notifications error', e); }
+  }
+
+  async function toggleNotifications() {
+    const panel = document.getElementById('notifPanel');
+    const isOpen = panel.style.display === 'block';
+    panel.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      await fetch('/api/notifications/read', { method: 'POST' });
+      document.getElementById('notifDot').style.display = 'none';
+    }
+  }
+
+  async function markAllRead() {
+    await fetch('/api/notifications/read', { method: 'POST' });
+    document.getElementById('notifDot').style.display = 'none';
+    loadNotifications();
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#notifPanel') && !e.target.closest('#notifBtn')) {
+      const panel = document.getElementById('notifPanel');
+      if (panel) panel.style.display = 'none';
+    }
+  });
+
+  // ── HELPERS ──
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function formatDate(str) {
+    if (!str) return '';
+    try {
+      return new Date(str).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) { return str; }
+  }
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.className = ''; }, 3000);
+  }
+
+  // Close modal on overlay click
+  document.getElementById('applyModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+</script>
+</body>
+</html>

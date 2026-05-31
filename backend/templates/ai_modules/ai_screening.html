@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Screening - Lumina AI</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+.glass-card{
+    background:rgba(30,41,59,0.4);
+    backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,0.1);
+}
+</style>
+</head>
+
+<body class="bg-[#13131b] text-white font-sans">
+
+<!-- NAV -->
+<nav class="fixed left-0 top-0 h-full w-[240px] bg-[#1b1b23] p-4">
+    <h1 class="text-xl font-bold text-purple-300 mb-6">Lumina AI</h1>
+
+    <a href="/dashboard" class="block py-2 px-3 rounded-lg hover:bg-purple-500/20 text-gray-300 hover:text-purple-300 mb-1">Dashboard</a>
+    <a href="/upload" class="block py-2 px-3 rounded-lg hover:bg-purple-500/20 text-gray-300 hover:text-purple-300 mb-1">Upload</a>
+    <a href="/screening" class="block py-2 px-3 rounded-lg hover:bg-purple-500/20 text-gray-300 hover:text-purple-300 mb-1">AI Screening</a>
+    <a href="/ai-interviewer" class="block py-2 px-3 rounded-lg hover:bg-purple-500/20 text-gray-300 hover:text-purple-300 mb-1">AI Interviewer</a>
+    <a href="/candidates" class="block py-2 px-3 rounded-lg hover:bg-purple-500/20 text-gray-300 hover:text-purple-300 mb-1">Candidates</a>
+    <a href="/history" class="block py-2 px-3 rounded-lg hover:bg-purple-500/20 text-gray-300 hover:text-purple-300 mb-1">History</a>
+    <a href="/logout" class="block py-2 px-3 rounded-lg hover:bg-red-500/20 text-gray-300 hover:text-red-300 mt-6">Logout</a>
+</nav>
+
+<!-- MAIN -->
+<main class="ml-[260px] p-6 space-y-6">
+
+<!-- HEADER -->
+<div class="glass-card p-6 rounded-xl">
+    <h2 class="text-2xl font-bold text-purple-300">
+        Candidate Analysis: {{ candidate_name or "Unknown Candidate" }}
+    </h2>
+    <p class="text-gray-400">AI-powered resume screening output</p>
+</div>
+
+<!-- ATS SCORE -->
+<div class="glass-card p-6 rounded-xl">
+    <h3 class="text-lg font-bold mb-4">ATS Score</h3>
+
+    <div class="text-5xl font-bold text-purple-300">
+        {{ ats_score or "85" }}%
+    </div>
+
+    <p class="text-gray-400 mt-2">
+        Ranked in top percentile based on matching skills
+    </p>
+</div>
+
+<!-- SKILLS -->
+<div class="glass-card p-6 rounded-xl">
+    <h3 class="font-bold mb-3">Key Skills</h3>
+
+    {% for skill in skills or ["Python","AWS","Kubernetes"] %}
+        <span class="inline-block bg-purple-500/20 px-3 py-1 rounded-full m-1">
+            {{ skill }}
+        </span>
+    {% endfor %}
+</div>
+
+<!-- INSIGHT -->
+<div class="glass-card p-6 rounded-xl">
+    <h3 class="font-bold mb-3">AI Insight</h3>
+    <p class="text-gray-300">
+        {{ insight or "Strong cloud architecture experience with scalable system design background." }}
+    </p>
+</div>
+
+<!-- ACTIONS -->
+<div class="flex gap-4">
+
+    <form method="POST" action="/generate-report">
+        <input type="hidden" name="candidate_id" value="{{ candidate_id }}">
+        <button class="bg-purple-600 px-4 py-2 rounded-xl hover:bg-purple-700">
+            Generate Report
+        </button>
+    </form>
