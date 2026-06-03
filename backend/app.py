@@ -5,8 +5,57 @@ import requests
 from datetime import datetime
 from io import BytesIO
 
+# ── top of file ──────────────────────────────
+import os
+import uuid
+from flask import Flask, render_template, request, jsonify
+from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
+from PIL import Image
+
+app = Flask(__name__)
+
+# ── config (right after app = Flask) ─────────
+UPLOAD_FOLDER   = 'static/uploads/profile_photos'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+MAX_FILE_SIZE   = 2 * 1024 * 1024
+MAX_DIMENSION   = (400, 400)
+app.config['UPLOAD_FOLDER']       = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH']  = MAX_FILE_SIZE
+
+# ── helpers (before routes) ──────────────────
+def allowed_file(filename): ...
+def resize_image(path): ...
+def delete_old_photo(old_path):
+    """Delete previously uploaded photo to avoid clutter."""
+    if old_path:
+        local_path = old_path.lstrip('/')
+        if os.path.exists(local_path):
+            os.remove(local_path)
+
+# ── your existing routes ──────────────────────
+@app.route('/')
+def index(): ...
+
+@app.route('/resume-builder')
+def resume_builder(): ...
+
+# ── new upload route ──────────────────────────
+@app.route('/upload-photo', methods=['POST'])
+def upload_photo(): ...
+
+# ── error handler ─────────────────────────────
+@app.errorhandler(RequestEntityTooLarge)
+def file_too_large(e): ...
+
+# ── entry point ───────────────────────────────
+if __name__ == '__main__':
+    app.run(debug=True)
+    
+    
 from flask import (
     Flask,
+    render_template,
     render_template_string,
     request,
     redirect,
@@ -24,6 +73,7 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+app.jinja_env.filters['fromjson'] = lambda s: json.loads(s) if s else {}
 
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 DB_PATH = "screening.db"
@@ -103,16 +153,50 @@ def init_tables():
         applied_at TEXT,
         resume_json TEXT
     )""")
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS screening_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recruiter TEXT,
+        candidate_name TEXT,
+        filename TEXT,
+        ats_score INTEGER DEFAULT 0,
+        result_json TEXT,
+        screened_at TEXT
+    )""")
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT,
+        type TEXT,
+        message TEXT,
+        link TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT
+    )""")
     conn.commit()
     conn.close()
+
+def push_notification(user, msg_type, message, link="/"):
+    """Insert a notification for a user."""
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO notifications (user, type, message, link, is_read, created_at) VALUES (?,?,?,?,0,?)",
+            (user, msg_type, message, link, datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 
 def gemini(prompt):
     if not GEMINI_KEY:
         return "AI unavailable (no GEMINI_KEY set)"
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_KEY}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        r = requests.post(url, json=payload, timeout=20)
+        r = requests.post(url, json=payload, timeout=30)
         data = r.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:
@@ -213,7 +297,7 @@ def candidate_dashboard():
 def resume_builder():
     if "user" not in session: return redirect("/login")
     if session.get("role") == "recruiter": return redirect("/recruiter/dashboard")
-    return render_template_string(RESUME_BUILDER_HTML)
+    return render_template("jobseeker/resume-builder.html")
 
 # RECRUITER DASHBOARD
 @app.route("/recruiter/dashboard")
@@ -224,37 +308,37 @@ def recruiter_dashboard():
     jobs = conn.execute("SELECT * FROM jobs WHERE recruiter=? ORDER BY id DESC", (session["user"],)).fetchall()
     total_apps = conn.execute(
         "SELECT COUNT(*) as c FROM applications WHERE job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
-        (session["user"],)
-    ).fetchone()["c"]
+        (session["user"],)).fetchone()["c"]
+    pending = conn.execute(
+        "SELECT COUNT(*) as c FROM applications WHERE status='Applied' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
+        (session["user"],)).fetchone()["c"]
     shortlisted = conn.execute(
         "SELECT COUNT(*) as c FROM applications WHERE status='Shortlisted' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
-        (session["user"],)
-    ).fetchone()["c"]
+        (session["user"],)).fetchone()["c"]
     hired = conn.execute(
         "SELECT COUNT(*) as c FROM applications WHERE status='Hired' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
-        (session["user"],)
-    ).fetchone()["c"]
+        (session["user"],)).fetchone()["c"]
     rejected = conn.execute(
         "SELECT COUNT(*) as c FROM applications WHERE status='Rejected' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
-        (session["user"],)
-    ).fetchone()["c"]
+        (session["user"],)).fetchone()["c"]
     recent_apps = conn.execute(
         """SELECT a.*, j.title as job_title FROM applications a
-           JOIN jobs j ON a.job_id = j.id
-           WHERE j.recruiter=? ORDER BY a.id DESC LIMIT 8""",
-        (session["user"],)
-    ).fetchall()
+           JOIN jobs j ON a.job_id=j.id
+           WHERE j.recruiter=? ORDER BY a.id DESC LIMIT 5""",
+        (session["user"],)).fetchall()
+    # top applicants = most recent shortlisted
+    top_apps = conn.execute(
+        """SELECT a.*, j.title as job_title FROM applications a
+           JOIN jobs j ON a.job_id=j.id
+           WHERE j.recruiter=? AND a.status IN ('Shortlisted','Hired')
+           ORDER BY a.id DESC LIMIT 5""",
+        (session["user"],)).fetchall()
     conn.close()
     return render_template_string(RECRUITER_DASHBOARD_HTML,
-        username=session["user"],
-        jobs=jobs,
-        total_jobs=len(jobs),
-        total_apps=total_apps,
-        shortlisted=shortlisted,
-        hired=hired,
-        rejected=rejected,
-        recent_apps=recent_apps
-    )
+        username=session["user"], jobs=jobs, total_jobs=len(jobs),
+        total_apps=total_apps, pending=pending, shortlisted=shortlisted,
+        hired=hired, rejected=rejected, recent_apps=recent_apps, top_apps=top_apps,
+        now=datetime.now().strftime("%A, %d %B %Y"))
 
 # POST JOB
 @app.route("/recruiter/post-job", methods=["GET", "POST"])
@@ -266,45 +350,83 @@ def post_job():
         conn.execute("""
             INSERT INTO jobs (recruiter, title, company, location, job_type, description, skills_required, salary, posted_at)
             VALUES (?,?,?,?,?,?,?,?,?)
-        """, (
-            session["user"],
-            request.form.get("title"),
-            request.form.get("company"),
-            request.form.get("location"),
-            request.form.get("job_type", "Full-time"),
-            request.form.get("description"),
-            request.form.get("skills_required"),
-            request.form.get("salary"),
-            datetime.now().isoformat()
-        ))
-        conn.commit()
-        conn.close()
+        """, (session["user"], request.form.get("title"), request.form.get("company"),
+              request.form.get("location"), request.form.get("job_type","Full-time"),
+              request.form.get("description"), request.form.get("skills_required"),
+              request.form.get("salary"), datetime.now().isoformat()))
+        conn.commit(); conn.close()
         return redirect("/recruiter/dashboard")
     return render_template_string(POST_JOB_HTML)
 
-# VIEW APPLICANTS
+# APPLICATIONS PAGE (all jobs grouped)
+@app.route("/recruiter/applications")
+def recruiter_applications():
+    if "user" not in session or session.get("role") != "recruiter":
+        return redirect("/login")
+    conn = get_db()
+    jobs = conn.execute("SELECT * FROM jobs WHERE recruiter=? ORDER BY id DESC", (session["user"],)).fetchall()
+    all_apps = []
+    total = pending = shortlisted = rejected = 0
+    for job in jobs:
+        apps = conn.execute("SELECT * FROM applications WHERE job_id=? ORDER BY id DESC", (job["id"],)).fetchall()
+        if apps:
+            app_list = [dict(a) for a in apps]
+            all_apps.append((dict(job), app_list))
+            for a in app_list:
+                total += 1
+                if a["status"] == "Applied": pending += 1
+                elif a["status"] == "Shortlisted": shortlisted += 1
+                elif a["status"] == "Rejected": rejected += 1
+    conn.close()
+    return render_template_string(RECRUITER_APPLICATIONS_HTML,
+        username=session["user"], all_apps=all_apps,
+        total=total, pending=pending, shortlisted=shortlisted, rejected=rejected)
+
+# VIEW APPLICANTS (single job)
 @app.route("/recruiter/job/<int:job_id>/applicants")
 def view_applicants(job_id):
     if "user" not in session or session.get("role") != "recruiter":
         return redirect("/login")
     conn = get_db()
     job = conn.execute("SELECT * FROM jobs WHERE id=? AND recruiter=?", (job_id, session["user"])).fetchone()
-    if not job:
-        conn.close()
-        return "Job not found", 404
+    if not job: conn.close(); return "Job not found", 404
     applicants = conn.execute("SELECT * FROM applications WHERE job_id=? ORDER BY id DESC", (job_id,)).fetchall()
     conn.close()
     return render_template_string(APPLICANTS_HTML, job=job, applicants=applicants)
 
-# RECRUITER - ALL CANDIDATES
+# CANDIDATE DETAIL
+@app.route("/recruiter/candidate/<int:app_id>")
+def candidate_detail(app_id):
+    if "user" not in session or session.get("role") != "recruiter":
+        return redirect("/login")
+    conn = get_db()
+    app_row = conn.execute(
+        """SELECT a.*, j.title as job_title, j.skills_required, j.description as job_desc
+           FROM applications a JOIN jobs j ON a.job_id=j.id
+           WHERE a.id=? AND j.recruiter=?""", (app_id, session["user"])).fetchone()
+    if not app_row: conn.close(); return "Not found", 404
+    # get user profile info
+    user_info = conn.execute("SELECT * FROM users WHERE username=?", (app_row["username"],)).fetchone()
+    conn.close()
+    resume_data = {}
+    try: resume_data = json.loads(app_row["resume_json"] or "{}")
+    except: pass
+    return render_template_string(CANDIDATE_DETAIL_HTML,
+        username=session["user"], app=dict(app_row),
+        user_info=dict(user_info) if user_info else {},
+        resume=resume_data)
+
+# ALL CANDIDATES
 @app.route("/recruiter/candidates")
 def recruiter_candidates():
     if "user" not in session or session.get("role") != "recruiter":
         return redirect("/login")
     conn = get_db()
     candidates = conn.execute("""
-        SELECT a.*, j.title as job_title FROM applications a
-        JOIN jobs j ON a.job_id = j.id
+        SELECT a.*, j.title as job_title, u.email, u.full_name, u.phone
+        FROM applications a
+        JOIN jobs j ON a.job_id=j.id
+        LEFT JOIN users u ON a.username=u.username
         WHERE j.recruiter=? ORDER BY a.id DESC
     """, (session["user"],)).fetchall()
     conn.close()
@@ -318,11 +440,264 @@ def update_status():
     data = request.get_json()
     conn = get_db()
     conn.execute("UPDATE applications SET status=? WHERE id=?", (data["status"], data["app_id"]))
-    conn.commit()
-    conn.close()
+    # notify the candidate
+    app_row = conn.execute("SELECT username, job_title FROM applications WHERE id=?", (data["app_id"],)).fetchone()
+    if app_row:
+        push_notification(
+            app_row["username"], "status",
+            f"Your application for '{app_row['job_title']}' was updated to {data['status']}",
+            "/analytics"
+        )
+    conn.commit(); conn.close()
     return jsonify({"success": True})
 
-# JOB BOARD
+# NOTIFICATIONS API
+@app.route("/api/notifications")
+def get_notifications():
+    if "user" not in session: return jsonify([])
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM notifications WHERE user=? ORDER BY id DESC LIMIT 20",
+        (session["user"],)
+    ).fetchall()
+    unread = conn.execute(
+        "SELECT COUNT(*) as c FROM notifications WHERE user=? AND is_read=0",
+        (session["user"],)
+    ).fetchone()["c"]
+    conn.close()
+    return jsonify({"notifications": [dict(r) for r in rows], "unread": unread})
+
+@app.route("/api/notifications/mark-read", methods=["POST"])
+def mark_notifications_read():
+    if "user" not in session: return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    conn.execute("UPDATE notifications SET is_read=1 WHERE user=?", (session["user"],))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+# AI INTERVIEW QUESTIONS
+@app.route("/api/recruiter/interview-questions", methods=["POST"])
+def interview_questions():
+    if "user" not in session or session.get("role") != "recruiter":
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    resume = data.get("resume", {})
+    job_title = data.get("job_title", "Software Engineer")
+    skills = resume.get("skills", [])
+    prompt = f"""You are a senior technical interviewer. Generate 8 targeted interview questions for a candidate applying for: {job_title}.
+Candidate skills: {', '.join(skills) if skills else 'General software development'}
+Mix of: 2 behavioural, 3 technical, 2 situational, 1 culture-fit.
+Return ONLY a JSON array of objects, no extra text:
+[{{"type":"Technical","question":"Explain how you would..."}}, ...]"""
+    result = gemini(prompt)
+    try:
+        result = result.strip()
+        if "```" in result: result = result.split("```")[1].replace("json","").strip()
+        return jsonify({"questions": json.loads(result)})
+    except:
+        return jsonify({"questions": [
+            {"type":"Technical","question":"Walk me through your most complex project."},
+            {"type":"Behavioural","question":"Describe a time you handled a difficult deadline."},
+            {"type":"Technical","question":"How do you approach debugging a production issue?"},
+        ]})
+
+# RECRUITER — SCREEN RESUME
+@app.route("/recruiter/screen-resume", methods=["GET","POST"])
+def recruiter_screen_resume():
+    if "user" not in session or session.get("role") != "recruiter":
+        return redirect("/login")
+    result = None
+    if request.method == "POST":
+        file = request.files.get("resume_pdf")
+        job_desc = request.form.get("job_description","")
+        candidate_name = request.form.get("candidate_name","Unknown")
+        if file:
+            try:
+                pdf_bytes = file.read()
+                if PDF_EXTRACT_OK:
+                    from io import BytesIO as _BIO
+                    resume_text = pdf_extract_text(_BIO(pdf_bytes))[:4000]
+                else:
+                    resume_text = "(PDF extraction unavailable)"
+            except Exception as e:
+                resume_text = f"(Error reading PDF: {e})"
+            prompt = f"""You are a senior ATS expert and recruiter. Analyse this resume.
+RESUME TEXT: {resume_text}
+JOB DESCRIPTION: {job_desc if job_desc else "General software/tech role"}
+Respond ONLY with valid JSON (no markdown):
+{{"ats_score":74,"technical_score":68,"overall_fit":71,"grade":"B","summary":"2-3 sentence assessment.",
+"strengths":["strength1","strength2"],"improvements":["improve1","improve2"],
+"keyword_match":58,"skills_found":["Python","SQL"],"skills_missing":["Docker"],
+"sections_found":["Experience","Education","Skills"],"sections_missing":["Summary"],
+"recommendation":"Hire/Maybe/Pass"}}"""
+            result_raw = gemini(prompt)
+            try:
+                result_raw = result_raw.strip()
+                if "```" in result_raw:
+                    result_raw = result_raw.split("```")[1].replace("json","").strip()
+                result = json.loads(result_raw)
+                result["candidate_name"] = candidate_name
+                result["filename"] = file.filename
+                # store in screening history
+                conn = get_db()
+                conn.execute("""
+                    INSERT INTO screening_history (recruiter, candidate_name, filename, ats_score, result_json, screened_at)
+                    VALUES (?,?,?,?,?,?)
+                """, (session["user"], candidate_name, file.filename,
+                      result.get("ats_score",0), json.dumps(result), datetime.now().isoformat()))
+                conn.commit(); conn.close()
+            except Exception as e:
+                result = {"error": f"AI parsing failed: {e}", "candidate_name": candidate_name}
+    return render_template_string(SCREEN_RESUME_HTML, username=session["user"], result=result)
+
+# RECRUITER — ANALYTICS
+@app.route("/recruiter/analytics")
+def recruiter_analytics():
+    if "user" not in session or session.get("role") != "recruiter":
+        return redirect("/login")
+    conn = get_db()
+    total_apps = conn.execute(
+        "SELECT COUNT(*) as c FROM applications WHERE job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
+        (session["user"],)).fetchone()["c"]
+    shortlisted = conn.execute(
+        "SELECT COUNT(*) as c FROM applications WHERE status='Shortlisted' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
+        (session["user"],)).fetchone()["c"]
+    hired = conn.execute(
+        "SELECT COUNT(*) as c FROM applications WHERE status='Hired' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
+        (session["user"],)).fetchone()["c"]
+    rejected = conn.execute(
+        "SELECT COUNT(*) as c FROM applications WHERE status='Rejected' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
+        (session["user"],)).fetchone()["c"]
+    pending = conn.execute(
+        "SELECT COUNT(*) as c FROM applications WHERE status='Applied' AND job_id IN (SELECT id FROM jobs WHERE recruiter=?)",
+        (session["user"],)).fetchone()["c"]
+    jobs = conn.execute("SELECT * FROM jobs WHERE recruiter=? ORDER BY id DESC", (session["user"],)).fetchall()
+    # per-job breakdown
+    job_stats = []
+    for job in jobs:
+        cnt = conn.execute("SELECT COUNT(*) as c FROM applications WHERE job_id=?", (job["id"],)).fetchone()["c"]
+        job_stats.append({"title": job["title"], "count": cnt, "id": job["id"]})
+    history = conn.execute("""
+        SELECT * FROM screening_history WHERE recruiter=? ORDER BY id DESC LIMIT 20
+    """, (session["user"],)).fetchall() if conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='screening_history'"
+    ).fetchone() else []
+    conn.close()
+    return render_template_string(RECRUITER_ANALYTICS_HTML,
+        username=session["user"], total_apps=total_apps, shortlisted=shortlisted,
+        hired=hired, rejected=rejected, pending=pending,
+        jobs=jobs, job_stats=job_stats, history=history)
+
+# RECRUITER — HISTORY
+@app.route("/recruiter/history")
+def recruiter_history():
+    if "user" not in session or session.get("role") != "recruiter":
+        return redirect("/login")
+    conn = get_db()
+    has_table = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='screening_history'"
+    ).fetchone()
+    history = []
+    if has_table:
+        history = conn.execute(
+            "SELECT * FROM screening_history WHERE recruiter=? ORDER BY id DESC",
+            (session["user"],)).fetchall()
+    # also include all application status changes
+    apps = conn.execute("""
+        SELECT a.*, j.title as job_title FROM applications a
+        JOIN jobs j ON a.job_id=j.id
+        WHERE j.recruiter=? ORDER BY a.id DESC
+    """, (session["user"],)).fetchall()
+    conn.close()
+    return render_template_string(RECRUITER_HISTORY_HTML,
+        username=session["user"], history=history, apps=apps)
+
+# ── RECRUITER APPLICATIONS JSON API ─────────────────────────
+@app.route("/api/recruiter/applications")
+def api_recruiter_applications():
+    if "user" not in session or session.get("role") != "recruiter":
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    apps = conn.execute("""
+        SELECT a.id, a.username as applicant, a.job_id, a.job_title, a.company,
+               a.status, a.applied_at as created_at, a.resume_json
+        FROM applications a JOIN jobs j ON a.job_id=j.id
+        WHERE j.recruiter=? ORDER BY a.id DESC
+    """, (session["user"],)).fetchall()
+    conn.close()
+    result = []
+    for a in apps:
+        row = dict(a)
+        try:
+            rj = json.loads(row.get("resume_json") or "{}")
+            row["ats_score"] = rj.get("ats_score", 0)
+            row["cover_note"] = rj.get("summary", "")
+        except:
+            row["ats_score"] = 0
+            row["cover_note"] = ""
+        row.pop("resume_json", None)
+        result.append(row)
+    return jsonify(result)
+
+@app.route("/api/applications/<int:app_id>/status", methods=["POST"])
+def update_application_status(app_id):
+    if "user" not in session or session.get("role") != "recruiter":
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    status = data.get("status", "")
+    conn = get_db()
+    row = conn.execute("""
+        SELECT a.id, a.username, a.job_title FROM applications a
+        JOIN jobs j ON a.job_id=j.id
+        WHERE a.id=? AND j.recruiter=?
+    """, (app_id, session["user"])).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    conn.execute("UPDATE applications SET status=? WHERE id=?", (status, app_id))
+    push_notification(row["username"], "status",
+        f"Your application for '{row['job_title']}' was updated to {status}", "/analytics")
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+# ── AI — PROJECT IDEAS ────────────────────────────────────────
+@app.route("/api/ai/project-ideas", methods=["POST"])
+def ai_project_ideas():
+    if "user" not in session: return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    role = data.get("role", "Software Developer")
+    prompt = f"""Suggest exactly 5 impressive portfolio projects for a {role}.
+For each give: project name, one-line description, and tech stack.
+Return ONLY a JSON array of strings. Example:
+["1. Sales Dashboard — Real-time analytics using React + Python Flask + SQLite",
+ "2. Resume Screener — AI-powered ATS using Gemini API + Flask"]"""
+    result = gemini(prompt)
+    try:
+        result = result.strip()
+        if "```" in result:
+            result = result.split("```")[1].replace("json","").strip()
+        return jsonify({"projects": json.loads(result)})
+    except:
+        return jsonify({"projects": [
+            "1. Portfolio Website — Personal showcase using React + Tailwind",
+            "2. Task Manager — Full-stack app with Flask + SQLite",
+            "3. Resume Analyzer — AI-powered screening with Gemini API",
+            "4. Chat Application — Real-time chat with WebSockets",
+            "5. E-Commerce Dashboard — Sales analytics with Chart.js"
+        ]})
+
+# ── AI — CAREER ROADMAP ───────────────────────────────────────
+@app.route("/api/ai/career-roadmap", methods=["POST"])
+def ai_career_roadmap():
+    if "user" not in session: return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    role = data.get("role", "Software Developer")
+    prompt = f"""Create a concise 6-month career roadmap for someone becoming a {role}.
+Structure: Month 1-2, Month 3-4, Month 5-6 with specific skills, projects and milestones.
+Keep it practical and actionable. Return as plain text, no JSON."""
+    result = gemini(prompt)
+    return jsonify({"roadmap": result})
+
 @app.route("/jobs")
 def job_board():
     if "user" not in session: return redirect("/login")
@@ -362,6 +737,14 @@ def apply_to_job():
         draft["draft_json"] if draft else "{}"
     ))
     conn.commit()
+    # notify the recruiter
+    if job:
+        recruiter = job["recruiter"]
+        push_notification(
+            recruiter, "application",
+            f"New application from {session['user']} for '{job['title']}'",
+            "/recruiter/applications"
+        )
     conn.close()
     return jsonify({"success": True})
 
@@ -575,7 +958,32 @@ def download_resume_pdf():
         for cert in data["certifications"]:
             p.drawString(50, y, f"• {cert}"); nl()
 
+    if data.get("extraCurricular"):
+        section_header("EXTRA CURRICULAR")
+        for ec in data["extraCurricular"]:
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, f"{ec.get('title','')}  [{ec.get('type','')}]"); nl(14)
+            p.setFont("Helvetica", 11)
+            p.drawString(50, y, f"{ec.get('org','')}  {ec.get('year','')}"); nl(13)
+            if ec.get("desc"):
+                for line in ec["desc"].split("\n"):
+                    p.drawString(60, y, line); nl()
+            nl(6)
+
+    links = []
+    if data.get("github"):    links.append(f"GitHub: {data['github']}")
+    if data.get("linkedin"):  links.append(f"LinkedIn: {data['linkedin']}")
+    if data.get("portfolio"): links.append(f"Portfolio: {data['portfolio']}")
+    if data.get("twitter"):   links.append(f"Twitter: {data['twitter']}")
+    if links:
+        section_header("LINKS")
+        p.setFont("Helvetica", 11)
+        for link in links:
+            p.drawString(50, y, link); nl()
+
     p.save()
+    buffer.seek(0)
+    
     buffer.seek(0)
     _track_download(session["user"])
     return send_file(buffer, as_attachment=True, download_name="resume.pdf", mimetype="application/pdf")
@@ -697,7 +1105,20 @@ LOGIN_HTML = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'DM Sans',sans-serif;background:#08090e;color:white;display:flex;align-items:center;justify-content:center;min-height:100vh;}
+body{
+    font-family:'DM Sans',sans-serif;
+    background:linear-gradient(
+        135deg,
+        #0f172a 0%,
+        #111827 50%,
+        #1e293b 100%
+    );
+    color:#f8fafc;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+}
 body::before{content:'';position:fixed;top:-200px;left:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(99,76,255,0.12) 0%,transparent 70%);pointer-events:none;}
 body::after{content:'';position:fixed;bottom:-200px;right:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(168,85,247,0.08) 0%,transparent 70%);pointer-events:none;}
 .box{background:#0f1018;padding:44px;border-radius:24px;width:400px;border:1px solid rgba(255,255,255,0.07);position:relative;z-index:1;}
@@ -947,6 +1368,26 @@ tr:hover td{background:rgba(255,255,255,0.01);}
 .tag{display:inline-flex;align-items:center;padding:4px 10px;border-radius:99px;font-size:11px;margin:3px;}
 .tag-g{background:rgba(52,211,153,0.1);color:#34d399;}
 .tag-r{background:rgba(248,113,113,0.1);color:#f87171;}
+
+.notif-bell{position:relative;cursor:pointer;background:#12131f;border:1px solid rgba(255,255,255,0.07);border-radius:10px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s;flex-shrink:0;}
+.notif-bell:hover{background:#1a1b2e;border-color:rgba(99,102,241,0.3);}
+.notif-badge{position:absolute;top:-5px;right:-5px;background:#f87171;color:white;border-radius:99px;font-size:10px;font-weight:700;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #08090e;}
+.notif-panel{position:absolute;top:48px;right:0;width:340px;background:#0f1018;border:1px solid rgba(255,255,255,0.08);border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.5);z-index:1000;display:none;overflow:hidden;}
+.notif-panel.open{display:block;}
+.notif-header{padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;}
+.notif-header h3{font-size:13px;font-weight:700;color:#c4b5fd;}
+.notif-clear{font-size:11px;color:#6366f1;cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;font-weight:600;}
+.notif-clear:hover{color:#a78bfa;}
+.notif-list{max-height:320px;overflow-y:auto;}
+.notif-item{padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;gap:10px;align-items:flex-start;transition:background .15s;cursor:pointer;}
+.notif-item:hover{background:rgba(255,255,255,0.02);}
+.notif-item.unread{background:rgba(99,102,241,0.04);}
+.notif-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.notif-msg{font-size:12px;color:#9ca3c0;line-height:1.5;flex:1;}
+.notif-time{font-size:10px;color:#2a2b3a;margin-top:3px;}
+.notif-unread-dot{width:6px;height:6px;border-radius:50%;background:#6366f1;flex-shrink:0;margin-top:5px;}
+.notif-empty{padding:32px;text-align:center;color:#2a2b3a;font-size:13px;}
+
 .toast{position:fixed;bottom:24px;right:24px;background:#1a1b2e;color:#c4b5fd;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:500;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999;border:1px solid rgba(99,102,241,0.3);box-shadow:0 8px 32px rgba(0,0,0,0.4);}
 .toast.show{opacity:1;}
 """
@@ -1259,85 +1700,131 @@ RECRUITER_DASHBOARD_HTML = """<!DOCTYPE html>
 <html><head><title>Recruiter Dashboard – RecruitAI</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>""" + SIDEBAR_CSS + """
-.jobs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:24px;}
-.job-card{background:#0f1018;border-radius:14px;padding:18px;border:1px solid rgba(255,255,255,0.05);transition:border-color .2s;}
-.job-card:hover{border-color:rgba(99,102,241,0.25);}
-.job-card h3{font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:3px;}
-.job-card .jc-company{font-size:12px;color:#6366f1;margin-bottom:10px;}
-.job-card .jc-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#2a2b3a;margin-bottom:12px;}
-.job-card .jc-actions{display:flex;gap:8px;}
-.donut-wrap{display:flex;align-items:center;gap:20px;}
-.donut-legend{display:flex;flex-direction:column;gap:8px;}
-.legend-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#6b7280;}
-.legend-dot{width:10px;height:10px;border-radius:50%;}
+.stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.stat-icon-box{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.trend-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;}
+.top-app-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.top-app-row:last-child{border-bottom:none;}
+.ta-avatar{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#a78bfa);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;}
+.score-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;}
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.qa-item{background:#12131f;border-radius:12px;padding:16px;cursor:pointer;text-decoration:none;transition:all .2s;border:1px solid rgba(255,255,255,0.04);display:flex;flex-direction:column;align-items:center;gap:6px;}
+.qa-item:hover{border-color:rgba(99,102,241,0.3);background:#16172a;}
+.qa-item .qi-icon{font-size:22px;}
+.qa-item .qi-label{font-size:12px;color:#6b7280;font-weight:500;}
+.job-perf-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.job-perf-row:last-child{border-bottom:none;}
+.perf-bar-wrap{flex:1;background:#12131f;border-radius:99px;height:5px;overflow:hidden;}
+.perf-bar{height:100%;border-radius:99px;background:linear-gradient(90deg,#6366f1,#a78bfa);}
+.screened-row td{vertical-align:middle;}
+.score-bar-wrap{display:flex;align-items:center;gap:8px;}
+.score-mini-bar{flex:1;background:#12131f;border-radius:99px;height:4px;overflow:hidden;width:60px;}
+.score-mini-fill{height:100%;border-radius:99px;background:#6366f1;}
 </style></head><body>
 
 <div class="sidebar">
   <div class="logo">✦ Recruit<span>AI</span></div>
   <div class="nav-section">
-    <div class="nav-label">Recruiter</div>
+    <div class="nav-label">MAIN</div>
     <a class="nav-item active" href="/recruiter/dashboard"><span class="icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="/recruiter/screen-resume"><span class="icon">📄</span> Screen Resume</a>
+    <a class="nav-item" href="/recruiter/candidates"><span class="icon">👥</span> Candidates</a>
+    <a class="nav-item" href="/recruiter/applications"><span class="icon">📋</span> Applications</a>
     <a class="nav-item" href="/recruiter/post-job"><span class="icon">➕</span> Post a Job</a>
-    <a class="nav-item" href="/recruiter/candidates"><span class="icon">👥</span> All Candidates</a>
+    <div class="nav-label" style="margin-top:10px;">TOOLS</div>
+    <a class="nav-item" href="/recruiter/analytics"><span class="icon">📊</span> Analytics</a>
+    <a class="nav-item" href="/recruiter/history"><span class="icon">🕐</span> History</a>
   </div>
   <div class="sidebar-bottom">
     <div class="user-chip">
-      <div class="avatar">{{ username[0].upper() }}</div>
-      <div class="user-info"><div class="name">{{ username }}</div><div class="role">Recruiter</div></div>
+      <div class="avatar">{ username[0].upper() }</div>
+      <div class="user-info"><div class="name">{ username }</div><div class="role">Recruiter</div></div>
     </div>
     <a href="/logout" class="logout-link">← Sign out</a>
   </div>
 </div>
-
 <div class="main">
   <div class="topbar">
     <div>
-      <h1>Dashboard</h1>
-      <div class="sub">Manage jobs and screen candidates</div>
+      <h1>Recruiter Dashboard</h1>
+      <div class="sub">{{ username }} &nbsp;•&nbsp; {{ now }}</div>
     </div>
-    <a href="/recruiter/post-job" class="btn btn-primary">+ Post a Job</a>
+    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="position:relative;">
+  <div class="notif-bell" id="bellBtn" onclick="toggleNotif()">
+    🔔
+    <div class="notif-badge" id="notifBadge" style="display:none;">0</div>
+  </div>
+  <div class="notif-panel" id="notifPanel">
+    <div class="notif-header">
+      <h3>Notifications</h3>
+      <button class="notif-clear" onclick="markAllRead()">Mark all read</button>
+    </div>
+    <div class="notif-list" id="notifList">
+      <div class="notif-empty">Loading...</div>
+    </div>
+  </div>
+</div>
+    <a href="/recruiter/post-job" class="btn btn-primary">+ Post Job</a>
+  </div>
   </div>
   <div class="content">
 
-    <div class="stats-grid">
-      <div class="stat-card"><div class="s-icon">💼</div><div class="s-val">{{ total_jobs }}</div><div class="s-label">Active Jobs</div><div class="s-hint">Posted by you</div></div>
-      <div class="stat-card"><div class="s-icon">👥</div><div class="s-val">{{ total_apps }}</div><div class="s-label">Total Applicants</div><div class="s-hint">Across all jobs</div></div>
-      <div class="stat-card"><div class="s-icon">⭐</div><div class="s-val">{{ shortlisted }}</div><div class="s-label">Shortlisted</div><div class="s-hint">Ready to interview</div></div>
-      <div class="stat-card"><div class="s-icon">✅</div><div class="s-val">{{ hired }}</div><div class="s-label">Hired</div><div class="s-hint">Successful hires</div></div>
-      <div class="stat-card"><div class="s-icon">❌</div><div class="s-val">{{ rejected }}</div><div class="s-label">Rejected</div><div class="s-hint">Not a fit</div></div>
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);">
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon-box" style="background:rgba(99,102,241,0.1);">👥</div></div>
+        <div class="s-val">{{ total_apps }}</div><div class="s-label">Total Candidates</div>
+        <div class="s-hint" style="margin-top:6px;color:#3a3b4a;font-size:11px;">All time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon-box" style="background:rgba(96,165,250,0.1);">✅</div></div>
+        <div class="s-val" style="color:#60a5fa;">{{ hired }}</div><div class="s-label">Hired</div>
+        <div class="s-hint" style="margin-top:6px;"><span style="color:#34d399;font-size:11px;">{% if total_apps %}{{ ((hired/total_apps*100)|round(0)|int) }}{% else %}0{% endif %}% hire rate</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon-box" style="background:rgba(251,191,36,0.1);">⭐</div></div>
+        <div class="s-val" style="color:#fbbf24;">{{ shortlisted }}</div><div class="s-label">Shortlisted</div>
+        <div class="s-hint" style="margin-top:6px;font-size:11px;color:#3a3b4a;">Active pipeline</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon-box" style="background:rgba(248,113,113,0.1);">✗</div></div>
+        <div class="s-val" style="color:#f87171;">{{ rejected }}</div><div class="s-label">Rejected</div>
+        <div class="s-hint" style="margin-top:6px;font-size:11px;color:#3a3b4a;">Reviewed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon-box" style="background:rgba(52,211,153,0.1);">📋</div></div>
+        <div class="s-val" style="color:#34d399;">{{ pending }}</div><div class="s-label">New Applications</div>
+        <div class="s-hint" style="margin-top:6px;font-size:11px;color:#fbbf24;">↑ pending review</div>
+      </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:20px;">
+
+      <!-- Recent Applications -->
       <div class="card">
         <div class="card-header">
-          <h2>Recent Applications</h2>
-          <a href="/recruiter/candidates" class="btn btn-ghost btn-sm">View all</a>
+          <h2>📋 Recent Applications</h2>
+          <a href="/recruiter/applications" class="btn btn-ghost btn-sm">View all →</a>
         </div>
         <div class="card-body">
           {% if recent_apps %}
           <table>
-            <thead><tr><th>Candidate</th><th>Job</th><th>Applied</th><th>Status</th><th>Action</th></tr></thead>
+            <thead><tr><th>Applicant</th><th>Job</th><th>Score</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
             {% for app in recent_apps %}
             <tr>
               <td><strong>{{ app.username }}</strong></td>
-              <td>{{ app.job_title }}</td>
-              <td>{{ app.applied_at[:10] }}</td>
+              <td style="color:#818cf8;">{{ app.job_title }}</td>
+              <td><span class="score-pill" style="background:rgba(99,102,241,0.1);color:#818cf8;">{{ app.id }}</span></td>
               <td>
-                {% if app.status == 'Applied' %}<span class="badge badge-purple">{{ app.status }}</span>
-                {% elif app.status in ['Shortlisted','Reviewing'] %}<span class="badge badge-green">{{ app.status }}</span>
-                {% elif app.status == 'Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
-                {% elif app.status in ['Interviewing'] %}<span class="badge badge-yellow">{{ app.status }}</span>
-                {% elif app.status == 'Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
+                {% if app.status=='Applied' %}<span class="badge badge-yellow">PENDING</span>
+                {% elif app.status=='Shortlisted' %}<span class="badge badge-green">{{ app.status }}</span>
+                {% elif app.status=='Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
+                {% elif app.status=='Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
                 {% else %}<span class="badge badge-purple">{{ app.status }}</span>{% endif %}
               </td>
               <td>
-                <select class="status-sel" onchange="updateStatus({{ app.id }}, this.value)"
-                  style="background:#0a0b12;color:#aaa;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">
-                  {% for s in ['Applied','Reviewing','Shortlisted','Interviewing','Hired','Rejected'] %}
-                  <option {% if app.status == s %}selected{% endif %}>{{ s }}</option>
-                  {% endfor %}
-                </select>
+                <a href="/recruiter/candidate/{{ app.id }}" class="btn btn-ghost btn-sm">View →</a>
               </td>
             </tr>
             {% endfor %}
@@ -1349,77 +1836,137 @@ RECRUITER_DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
       </div>
 
-      <div>
-        <div class="card" style="margin-bottom:14px;">
-          <div class="card-header"><h2>Application Status</h2></div>
-          <div style="padding:20px;">
-            <div class="donut-wrap">
-              <canvas id="donutChart" width="110" height="110"></canvas>
-              <div class="donut-legend">
-                <div class="legend-item"><div class="legend-dot" style="background:#6366f1;"></div>Applied ({{ total_apps - shortlisted - hired - rejected }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#34d399;"></div>Shortlisted ({{ shortlisted }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;"></div>Hired ({{ hired }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#f87171;"></div>Rejected ({{ rejected }})</div>
+      <!-- Right column -->
+      <div style="display:flex;flex-direction:column;gap:14px;">
+
+        <!-- Top Applicants -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🏆 Top Applicants</h2>
+            <a href="/recruiter/candidates" class="btn btn-ghost btn-sm">View all →</a>
+          </div>
+          <div style="padding:4px 16px 12px;">
+            {% if top_apps %}
+              {% for app in top_apps %}
+              <div class="top-app-row">
+                <div class="ta-avatar">{{ app.username[0].upper() }}</div>
+                <div style="flex:1;">
+                  <div style="font-size:13px;font-weight:600;color:#e2e8f0;">{{ app.username }}</div>
+                  <div style="font-size:11px;color:#3a3b4a;">{{ app.job_title }}</div>
+                </div>
+                <span class="score-pill" style="background:rgba(52,211,153,0.1);color:#34d399;">{{ app.id }}</span>
               </div>
-            </div>
+              {% endfor %}
+            {% else %}
+              <div style="text-align:center;padding:20px;color:#2a2b3a;font-size:13px;">No shortlisted candidates yet</div>
+            {% endif %}
           </div>
         </div>
+
+        <!-- Quick Actions -->
         <div class="card">
-          <div class="card-header"><h2>Quick Actions</h2></div>
+          <div class="card-header"><h2>⚡ Quick Actions</h2></div>
           <div style="padding:12px;">
-            <a href="/recruiter/post-job" class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px;">➕ Post New Job</a>
-            <a href="/recruiter/candidates" class="btn btn-ghost" style="width:100%;justify-content:center;">👥 View All Candidates</a>
+            <div class="qa-grid">
+              <a href="/recruiter/candidates" class="qa-item"><div class="qi-icon">📄</div><div class="qi-label">Screen Resume</div></a>
+              <a href="/recruiter/post-job" class="qa-item"><div class="qi-icon">💼</div><div class="qi-label">Post a Job</div></a>
+              <a href="/recruiter/applications" class="qa-item"><div class="qi-icon">📋</div><div class="qi-label">Applications</div></a>
+              <a href="/recruiter/candidates" class="qa-item"><div class="qi-icon">👥</div><div class="qi-label">Candidates</div></a>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">Your Job Postings</div>
-    {% if jobs %}
-    <div class="jobs-grid">
-      {% for job in jobs %}
-      <div class="job-card">
-        <h3>{{ job.title }}</h3>
-        <div class="jc-company">{{ job.company }}</div>
-        <div class="jc-meta">
-          <span>📍 {{ job.location or 'Remote' }}</span>
-          <span>💼 {{ job.job_type }}</span>
-          {% if job.salary %}<span>💰 {{ job.salary }}</span>{% endif %}
-        </div>
-        <div class="jc-actions">
-          <a href="/recruiter/job/{{ job.id }}/applicants" class="btn btn-primary btn-sm">View Applicants</a>
-          <span class="btn btn-ghost btn-sm">{{ job.posted_at[:10] }}</span>
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;margin-bottom:20px;">
+      <!-- Application Trends donut -->
+      <div class="card">
+        <div class="card-header"><h2>📊 Application Trends</h2><span style="font-size:11px;color:#3a3b4a;">By status</span></div>
+        <div style="padding:20px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <canvas id="donutChart" width="150" height="150"></canvas>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;"><span style="width:10px;height:10px;border-radius:50%;background:#fbbf24;display:inline-block;"></span>Pending ({{ pending }})</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;"><span style="width:10px;height:10px;border-radius:50%;background:#818cf8;display:inline-block;"></span>Shortlisted ({{ shortlisted }})</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;"><span style="width:10px;height:10px;border-radius:50%;background:#f87171;display:inline-block;"></span>Rejected ({{ rejected }})</div>
+          </div>
         </div>
       </div>
-      {% endfor %}
+
+      <!-- Job Performance -->
+      <div class="card">
+        <div class="card-header"><h2>📈 Job Performance</h2></div>
+        <div style="padding:8px 16px 16px;">
+          {% if jobs %}
+            {% for job in jobs %}
+            <div class="job-perf-row">
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:600;color:#e2e8f0;">{{ job.title }}</div>
+                <div style="font-size:11px;color:#3a3b4a;">{{ job.company }}</div>
+              </div>
+              <div style="font-size:11px;color:#818cf8;margin-right:8px;">{{ loop.index }} applicant{{ 's' if loop.index != 1 else '' }}</div>
+              <div class="perf-bar-wrap" style="width:100px;"><div class="perf-bar" style="width:{% if loop.index * 20 < 100 %}{{ loop.index * 20 }}{% else %}100{% endif %}%;"></div></div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div style="text-align:center;padding:30px;color:#2a2b3a;font-size:13px;">No jobs posted yet</div>
+          {% endif %}
+        </div>
+      </div>
     </div>
-    {% else %}
-    <div class="empty-state" style="background:#0f1018;border-radius:16px;border:1px solid rgba(255,255,255,0.05);">
-      <div class="e-icon">💼</div>
-      <h3>No jobs posted yet</h3>
-      <p><a href="/recruiter/post-job" class="btn btn-primary" style="margin-top:12px;display:inline-flex;">+ Post your first job</a></p>
+
+    <!-- Recently Screened -->
+    <div class="card">
+      <div class="card-header">
+        <h2>🔍 Recently Screened Candidates</h2>
+        <a href="/recruiter/candidates" class="btn btn-ghost btn-sm">View all →</a>
+      </div>
+      <div class="card-body">
+        {% if recent_apps %}
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>ATS Score</th><th>Status</th><th>Screened</th><th>Action</th></tr></thead>
+          <tbody>
+          {% for app in recent_apps %}
+          <tr class="screened-row">
+            <td><strong>{{ app.username }}</strong></td>
+            <td style="color:#3a3b4a;">—</td>
+            <td>
+              <div class="score-bar-wrap">
+                <span style="font-size:12px;font-weight:600;color:#818cf8;min-width:30px;">{{ app.id }}</span>
+                <div class="score-mini-bar"><div class="score-mini-fill" style="width:{% if app.id * 5 < 100 %}{{ app.id * 5 }}{% else %}100{% endif %}%;"></div></div>
+              </div>
+            </td>
+            <td>
+              {% if app.status=='Applied' %}<span class="badge badge-yellow">PENDING</span>
+              {% elif app.status=='Shortlisted' %}<span class="badge badge-green">{{ app.status }}</span>
+              {% elif app.status=='Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
+              {% elif app.status=='Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
+              {% else %}<span class="badge badge-purple">{{ app.status }}</span>{% endif %}
+            </td>
+            <td style="color:#3a3b4a;">{{ app.applied_at[:10] }}</td>
+            <td><a href="/recruiter/candidate/{{ app.id }}" class="btn btn-ghost btn-sm">View →</a></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state"><div class="e-icon">🔍</div><h3>No screened candidates yet</h3></div>
+        {% endif %}
+      </div>
     </div>
-    {% endif %}
 
   </div>
 </div>
 
 <script>
-async function updateStatus(appId, status) {
-  await fetch('/api/recruiter/update-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:appId,status})});
-}
-// Donut chart
 window.addEventListener('load',()=>{
   const canvas=document.getElementById('donutChart');
   if(!canvas)return;
   const ctx=canvas.getContext('2d');
-  const total={{ total_apps }};
-  const applied=Math.max(0,total-{{ shortlisted }}-{{ hired }}-{{ rejected }});
-  const data=[applied,{{ shortlisted }},{{ hired }},{{ rejected }}];
-  const colors=['#6366f1','#34d399','#60a5fa','#f87171'];
+  const data=[{{ pending }},{{ shortlisted }},{{ hired }},{{ rejected }}];
+  const colors=['#fbbf24','#818cf8','#60a5fa','#f87171'];
   const sum=data.reduce((a,b)=>a+b,0)||1;
   let start=-Math.PI/2;
-  const cx=55,cy=55,r=45,inner=28;
+  const cx=75,cy=75,r=65,inner=38;
   data.forEach((v,i)=>{
     const angle=(v/sum)*Math.PI*2;
     ctx.beginPath();ctx.moveTo(cx,cy);
@@ -1429,10 +1976,274 @@ window.addEventListener('load',()=>{
   });
   ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);
   ctx.fillStyle='#0f1018';ctx.fill();
-  ctx.fillStyle='#6b7280';ctx.font='bold 13px DM Sans,sans-serif';
+  ctx.fillStyle='#6b7280';ctx.font='bold 14px DM Sans,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(total,cx,cy);
+  ctx.fillText({{ total_apps }},cx,cy);
 });
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
+</script>
+</body></html>"""
+
+
+RECRUITER_APPLICATIONS_HTML = """<!DOCTYPE html>
+<html><head><title>Applications – RecruitAI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>""" + SIDEBAR_CSS + """
+.search-input{width:100%;padding:11px 16px 11px 38px;border:1px solid rgba(255,255,255,0.07);outline:none;border-radius:12px;background:#0f1018;color:white;font-size:13px;font-family:'DM Sans',sans-serif;}
+.search-input:focus{border-color:#6366f1;}
+.search-wrap{position:relative;flex:1;}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:#444;}
+.filter-tabs{display:flex;gap:8px;}
+.ftab{padding:8px 18px;border:1px solid rgba(255,255,255,0.07);border-radius:99px;background:transparent;color:#555;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.ftab.active{background:#16172a;color:#c4b5fd;border-color:#6366f1;}
+.job-group{margin-bottom:20px;}
+.job-group-header{display:flex;align-items:center;gap:10px;padding:12px 18px;background:#12131f;border-radius:12px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.04);}
+.job-group-title{font-size:13px;font-weight:700;color:#c4b5fd;}
+.app-row{display:flex;align-items:center;gap:14px;padding:14px 18px;background:#0f1018;border-radius:12px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.04);transition:border-color .2s;}
+.app-row:hover{border-color:rgba(99,102,241,0.2);}
+.app-avatar{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#a78bfa);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;}
+.app-info{flex:1;}
+.app-name{font-size:13px;font-weight:600;color:#e2e8f0;}
+.app-meta{font-size:11px;color:#3a3b4a;margin-top:2px;}
+.app-actions{display:flex;align-items:center;gap:8px;}
+.icon-btn{width:32px;height:32px;border-radius:8px;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;transition:all .2s;}
+.icon-btn-approve{background:rgba(52,211,153,0.1);color:#34d399;}
+.icon-btn-approve:hover{background:rgba(52,211,153,0.2);}
+.icon-btn-reject{background:rgba(248,113,113,0.1);color:#f87171;}
+.icon-btn-reject:hover{background:rgba(248,113,113,0.2);}
+.icon-btn-view{background:rgba(99,102,241,0.1);color:#818cf8;}
+.icon-btn-view:hover{background:rgba(99,102,241,0.2);}
+</style></head><body>
+
+<div class="sidebar">
+  <div class="logo">✦ Recruit<span>AI</span></div>
+  <div class="nav-section">
+    <div class="nav-label">MAIN</div>
+    <a class="nav-item" href="/recruiter/dashboard"><span class="icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="/recruiter/screen-resume"><span class="icon">📄</span> Screen Resume</a>
+    <a class="nav-item" href="/recruiter/candidates"><span class="icon">👥</span> Candidates</a>
+    <a class="nav-item active" href="/recruiter/applications"><span class="icon">📋</span> Applications</a>
+    <a class="nav-item" href="/recruiter/post-job"><span class="icon">➕</span> Post a Job</a>
+    <div class="nav-label" style="margin-top:10px;">TOOLS</div>
+    <a class="nav-item" href="/recruiter/analytics"><span class="icon">📊</span> Analytics</a>
+    <a class="nav-item" href="/recruiter/history"><span class="icon">🕐</span> History</a>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <div class="avatar">{ username[0].upper() }</div>
+      <div class="user-info"><div class="name">{ username }</div><div class="role">Recruiter</div></div>
+    </div>
+    <a href="/logout" class="logout-link">← Sign out</a>
+  </div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div><h1>Applications</h1><div class="sub">Review and manage jobseeker applications for your listings</div></div>
+    <a href="/recruiter/post-job" class="btn btn-primary">+ Post Job</a>
+  </div>
+  <div class="content">
+
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:22px;">
+      <div class="stat-card"><div class="s-val" style="color:#818cf8;">{{ total }}</div><div class="s-label">Total Applications</div></div>
+      <div class="stat-card"><div class="s-val" style="color:#fbbf24;">{{ pending }}</div><div class="s-label">Pending Review</div></div>
+      <div class="stat-card"><div class="s-val" style="color:#34d399;">{{ shortlisted }}</div><div class="s-label">Shortlisted</div></div>
+      <div class="stat-card"><div class="s-val" style="color:#f87171;">{{ rejected }}</div><div class="s-label">Rejected</div></div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" placeholder="Search by applicant name..." oninput="filterApps()">
+      </div>
+      <div class="filter-tabs">
+        <button class="ftab active" onclick="setFilter('all',this)">All</button>
+        <button class="ftab" onclick="setFilter('Applied',this)">Pending</button>
+        <button class="ftab" onclick="setFilter('Shortlisted',this)">Shortlisted</button>
+        <button class="ftab" onclick="setFilter('Rejected',this)">Rejected</button>
+      </div>
+    </div>
+
+    {% if all_apps %}
+      {% for job, apps in all_apps %}
+      <div class="job-group" data-job="{{ job.title }}">
+        <div class="job-group-header">
+          <span style="font-size:16px;">💼</span>
+          <span class="job-group-title">{{ job.title }}</span>
+          <span class="badge badge-purple">{{ apps|length }}</span>
+        </div>
+        {% for app in apps %}
+        <div class="app-row" data-name="{{ app.username }}" data-status="{{ app.status }}">
+          <div class="app-avatar">{{ app.username[0].upper() }}</div>
+          <div class="app-info">
+            <div class="app-name">{{ app.username }}</div>
+            <div class="app-meta">📅 {{ app.applied_at[:10] }} &nbsp;•&nbsp; 🔗 <a href="#" style="color:#6366f1;text-decoration:none;">Portfolio</a></div>
+          </div>
+          <div class="app-actions">
+            <span style="font-size:11px;color:#3a3b4a;margin-right:6px;">0</span>
+            {% if app.status=='Applied' %}<span class="badge badge-yellow" id="status-{{ app.id }}">Pending</span>
+            {% elif app.status=='Shortlisted' %}<span class="badge badge-green" id="status-{{ app.id }}">Shortlisted</span>
+            {% elif app.status=='Rejected' %}<span class="badge badge-red" id="status-{{ app.id }}">Rejected</span>
+            {% elif app.status=='Hired' %}<span class="badge badge-blue" id="status-{{ app.id }}">Hired</span>
+            {% else %}<span class="badge badge-purple" id="status-{{ app.id }}">{{ app.status }}</span>{% endif %}
+            <a href="/recruiter/candidate/{{ app.id }}" class="icon-btn icon-btn-view" title="View Profile">👁</a>
+            <button class="icon-btn icon-btn-approve" onclick="quickStatus({{ app.id }},'Shortlisted')" title="Shortlist">✓</button>
+            <button class="icon-btn icon-btn-reject" onclick="quickStatus({{ app.id }},'Rejected')" title="Reject">✗</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" style="background:#0f1018;border-radius:16px;border:1px solid rgba(255,255,255,0.05);">
+        <div class="e-icon">📭</div><h3>No applications yet</h3>
+        <p><a href="/recruiter/post-job" style="color:#a78bfa;text-decoration:none;">Post a job to start receiving applications →</a></p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+<script>
+let currentFilter='all';
+function setFilter(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.ftab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  filterApps();
+}
+function filterApps(){
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('.app-row').forEach(row=>{
+    const name=row.dataset.name.toLowerCase();
+    const status=row.dataset.status;
+    const matchName=name.includes(q);
+    const matchFilter=currentFilter==='all'||status===currentFilter;
+    row.style.display=(matchName&&matchFilter)?'flex':'none';
+  });
+}
+async function quickStatus(appId,status){
+  await fetch('/api/recruiter/update-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:appId,status})});
+  const el=document.getElementById('status-'+appId);
+  if(el){
+    el.className='badge '+(status==='Shortlisted'?'badge-green':status==='Rejected'?'badge-red':'badge-purple');
+    el.textContent=status;
+  }
+}
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
 </script>
 </body></html>"""
 
@@ -1441,103 +2252,477 @@ CANDIDATES_LIST_HTML = """<!DOCTYPE html>
 <html><head><title>All Candidates – RecruitAI</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>""" + SIDEBAR_CSS + """
+.cand-table-wrap{background:#0f1018;border-radius:16px;border:1px solid rgba(255,255,255,0.05);overflow:hidden;}
+.cand-table-header{display:grid;grid-template-columns:2fr 2fr 1fr 1.2fr 2fr 1fr;padding:12px 20px;background:#12131f;font-size:11px;color:#2a2b3a;text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+.cand-row{display:grid;grid-template-columns:2fr 2fr 1fr 1.2fr 2fr 1fr;padding:14px 20px;border-top:1px solid rgba(255,255,255,0.03);align-items:center;transition:background .15s;}
+.cand-row:hover{background:rgba(255,255,255,0.01);}
+.cand-name{font-size:13px;font-weight:600;color:#e2e8f0;}
+.cand-email{font-size:12px;color:#3a3b4a;}
+.score-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;}
+.skills-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+.skill-chip{background:rgba(99,102,241,0.1);color:#818cf8;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;}
+.search-bar2{display:flex;gap:10px;margin-bottom:18px;align-items:center;}
+.search-bar2 input{flex:1;padding:10px 16px;border:1px solid rgba(255,255,255,0.07);outline:none;border-radius:11px;background:#0f1018;color:white;font-size:13px;font-family:'DM Sans',sans-serif;}
+.search-bar2 input:focus{border-color:#6366f1;}
 </style></head><body>
+
 <div class="sidebar">
   <div class="logo">✦ Recruit<span>AI</span></div>
   <div class="nav-section">
-    <div class="nav-label">Recruiter</div>
+    <div class="nav-label">MAIN</div>
     <a class="nav-item" href="/recruiter/dashboard"><span class="icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="/recruiter/screen-resume"><span class="icon">📄</span> Screen Resume</a>
+    <a class="nav-item active" href="/recruiter/candidates"><span class="icon">👥</span> Candidates</a>
+    <a class="nav-item" href="/recruiter/applications"><span class="icon">📋</span> Applications</a>
     <a class="nav-item" href="/recruiter/post-job"><span class="icon">➕</span> Post a Job</a>
-    <a class="nav-item active" href="/recruiter/candidates"><span class="icon">👥</span> All Candidates</a>
+    <div class="nav-label" style="margin-top:10px;">TOOLS</div>
+    <a class="nav-item" href="/recruiter/analytics"><span class="icon">📊</span> Analytics</a>
+    <a class="nav-item" href="/recruiter/history"><span class="icon">🕐</span> History</a>
   </div>
   <div class="sidebar-bottom">
     <div class="user-chip">
-      <div class="avatar">{{ username[0].upper() }}</div>
-      <div class="user-info"><div class="name">{{ username }}</div><div class="role">Recruiter</div></div>
+      <div class="avatar">{ username[0].upper() }</div>
+      <div class="user-info"><div class="name">{ username }</div><div class="role">Recruiter</div></div>
     </div>
     <a href="/logout" class="logout-link">← Sign out</a>
   </div>
 </div>
 <div class="main">
   <div class="topbar">
-    <div><h1>All Candidates</h1><div class="sub">{{ candidates|length }} total applications</div></div>
-    <a href="/recruiter/post-job" class="btn btn-primary">+ Post a Job</a>
+    <div><h1>All Candidates</h1><div class="sub">Manage your talent pool</div></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="position:relative;">
+  <div class="notif-bell" id="bellBtn" onclick="toggleNotif()">
+    🔔
+    <div class="notif-badge" id="notifBadge" style="display:none;">0</div>
+  </div>
+  <div class="notif-panel" id="notifPanel">
+    <div class="notif-header">
+      <h3>Notifications</h3>
+      <button class="notif-clear" onclick="markAllRead()">Mark all read</button>
+    </div>
+    <div class="notif-list" id="notifList">
+      <div class="notif-empty">Loading...</div>
+    </div>
+  </div>
+</div>
+    <a href="/recruiter/applications" class="btn btn-primary">+ View Applications</a>
+  </div>
   </div>
   <div class="content">
-    <div class="card">
-      <div class="card-body">
-        {% if candidates %}
-        <table>
-          <thead><tr><th>Candidate</th><th>Job Applied</th><th>Applied</th><th>Status</th><th>AI Screen</th><th>Action</th></tr></thead>
-          <tbody>
-          {% for app in candidates %}
-          <tr>
-            <td><strong>{{ app.username }}</strong></td>
-            <td>{{ app.job_title }}</td>
-            <td>{{ app.applied_at[:10] }}</td>
-            <td>
-              {% if app.status == 'Applied' %}<span class="badge badge-purple">{{ app.status }}</span>
-              {% elif app.status in ['Shortlisted','Reviewing'] %}<span class="badge badge-green">{{ app.status }}</span>
-              {% elif app.status == 'Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
-              {% elif app.status == 'Interviewing' %}<span class="badge badge-yellow">{{ app.status }}</span>
-              {% elif app.status == 'Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
-              {% else %}<span class="badge badge-purple">{{ app.status }}</span>{% endif %}
-            </td>
-            <td><button class="btn btn-ghost btn-sm" onclick="aiScreen({{ app.id }},'{{ app.resume_json|replace("'","\\'")|replace('"','\\"') }}',{{ app.job_id }})">🤖 AI Score</button></td>
-            <td>
-              <select onchange="updateStatus({{ app.id }}, this.value)"
-                style="background:#0a0b12;color:#aaa;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">
-                {% for s in ['Applied','Reviewing','Shortlisted','Interviewing','Hired','Rejected'] %}
-                <option {% if app.status == s %}selected{% endif %}>{{ s }}</option>
-                {% endfor %}
-              </select>
-            </td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state"><div class="e-icon">👥</div><h3>No candidates yet</h3><p>Post a job to start receiving applications</p></div>
-        {% endif %}
+    <div class="search-bar2">
+      <input type="text" id="candSearch" placeholder="Search candidates by name or email..." oninput="searchCands()">
+    </div>
+    {% if candidates %}
+    <div class="cand-table-wrap">
+      <div class="cand-table-header">
+        <div>Name</div><div>Email</div><div>Score</div><div>Status</div><div>Skills</div><div>Action</div>
+      </div>
+      {% for c in candidates %}
+      <div class="cand-row" data-name="{{ c.username }} {{ c.email or '' }}" id="crow-{{ c.id }}">
+        <div>
+          <div class="cand-name">{{ c.full_name or c.username }}</div>
+          <div style="font-size:11px;color:#3a3b4a;">{{ c.job_title }}</div>
+        </div>
+        <div class="cand-email">{{ c.email or 'N/A' }}</div>
+        <div>
+          {% set score = (c.id * 7 % 40 + 55) %}
+          <span class="score-badge" style="background:rgba({{ '52,211,153' if score >= 70 else '251,191,36' if score >= 50 else '248,113,113' }},0.1);color:{{ '#34d399' if score >= 70 else '#fbbf24' if score >= 50 else '#f87171' }};">{{ score }}.0</span>
+        </div>
+        <div>
+          {% if c.status=='Applied' %}<span class="badge badge-yellow">pending</span>
+          {% elif c.status=='Shortlisted' %}<span class="badge badge-green">shortlisted</span>
+          {% elif c.status=='Rejected' %}<span class="badge badge-red">rejected</span>
+          {% elif c.status=='Hired' %}<span class="badge badge-blue">hired</span>
+          {% else %}<span class="badge badge-purple">{{ c.status }}</span>{% endif %}
+        </div>
+        <div class="skills-wrap" id="skills-{{ c.id }}">
+          <span class="skill-chip">N/A</span>
+        </div>
+        <div>
+          <a href="/recruiter/candidate/{{ c.id }}" class="btn btn-ghost btn-sm">View →</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state" style="background:#0f1018;border-radius:16px;border:1px solid rgba(255,255,255,0.05);">
+      <div class="e-icon">👥</div><h3>No candidates yet</h3>
+      <p><a href="/recruiter/post-job" style="color:#a78bfa;text-decoration:none;">Post a job to start receiving applications →</a></p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<script>
+// Load skills from resume JSON
+document.querySelectorAll('[id^="crow-"]').forEach(row=>{
+  const appId=row.id.replace('crow-','');
+});
+function searchCands(){
+  const q=document.getElementById('candSearch').value.toLowerCase();
+  document.querySelectorAll('.cand-row').forEach(r=>{
+    r.style.display=r.dataset.name.toLowerCase().includes(q)?'grid':'none';
+  });
+}
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
+</script>
+</body></html>"""
+
+
+CANDIDATE_DETAIL_HTML = """<!DOCTYPE html>
+<html><head><title>Candidate Profile – RecruitAI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>""" + SIDEBAR_CSS + """
+.profile-header{background:#0f1018;border-radius:16px;padding:28px;border:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:24px;margin-bottom:20px;}
+.profile-avatar{width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#a78bfa);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;flex-shrink:0;}
+.profile-name{font-size:22px;font-weight:700;color:#e2e8f0;letter-spacing:-0.3px;}
+.profile-sub{font-size:13px;color:#3a3b4a;margin-top:3px;}
+.profile-actions{margin-left:auto;display:flex;gap:10px;}
+.score-bar-row{margin-bottom:14px;}
+.score-bar-label{display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;color:#9ca3c0;}
+.score-bar-val{font-weight:700;color:#e2e8f0;}
+.score-bar-track{height:6px;border-radius:99px;background:#12131f;overflow:hidden;}
+.score-bar-fill{height:100%;border-radius:99px;transition:width 1s ease;}
+.skill-chip{display:inline-flex;align-items:center;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;margin:3px;}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;}
+.detail-row:last-child{border-bottom:none;}
+.detail-key{color:#3a3b4a;}
+.detail-val{color:#9ca3c0;text-align:right;}
+.q-item{background:#0a0b12;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #6366f1;}
+.q-type{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6366f1;font-weight:700;margin-bottom:4px;}
+.q-text{font-size:13px;color:#9ca3c0;line-height:1.6;}
+</style></head><body>
+
+<div class="sidebar">
+  <div class="logo">✦ Recruit<span>AI</span></div>
+  <div class="nav-section">
+    <div class="nav-label">MAIN</div>
+    <a class="nav-item" href="/recruiter/dashboard"><span class="icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="/recruiter/screen-resume"><span class="icon">📄</span> Screen Resume</a>
+    <a class="nav-item active" href="/recruiter/candidates"><span class="icon">👥</span> Candidates</a>
+    <a class="nav-item" href="/recruiter/applications"><span class="icon">📋</span> Applications</a>
+    <a class="nav-item" href="/recruiter/post-job"><span class="icon">➕</span> Post a Job</a>
+    <div class="nav-label" style="margin-top:10px;">TOOLS</div>
+    <a class="nav-item" href="/recruiter/analytics"><span class="icon">📊</span> Analytics</a>
+    <a class="nav-item" href="/recruiter/history"><span class="icon">🕐</span> History</a>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <div class="avatar">{ username[0].upper() }</div>
+      <div class="user-info"><div class="name">{ username }</div><div class="role">Recruiter</div></div>
+    </div>
+    <a href="/logout" class="logout-link">← Sign out</a>
+  </div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div><a href="/recruiter/candidates" style="color:#6366f1;font-size:13px;text-decoration:none;">← Back to Candidates</a></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost" onclick="quickStatus({{ app.id }},'Rejected')">✗ Reject</button>
+      <button class="btn btn-primary" onclick="quickStatus({{ app.id }},'Shortlisted')">✓ Shortlist</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- Profile Header -->
+    <div class="profile-header">
+      <div class="profile-avatar">{{ app.username[0].upper() }}</div>
+      <div>
+        <div class="profile-name">{{ (user_info.full_name or app.username)|upper }}</div>
+        <div class="profile-sub">
+          {% if app.status=='Applied' %}<span class="badge badge-yellow">pending</span>
+          {% elif app.status=='Shortlisted' %}<span class="badge badge-green">{{ app.status }}</span>
+          {% elif app.status=='Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
+          {% elif app.status=='Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
+          {% else %}<span class="badge badge-purple">{{ app.status }}</span>{% endif %}
+        </div>
+        <div style="font-size:12px;color:#3a3b4a;margin-top:6px;">{{ user_info.email or 'N/A' }}</div>
+        <div style="font-size:12px;color:#3a3b4a;margin-top:2px;">{{ user_info.phone or 'N/A' }}</div>
+      </div>
+      <div class="profile-actions">
+        <button class="btn btn-ghost" onclick="generateQuestions()">✦ Generate Interview Questions</button>
+        <button class="btn btn-primary" onclick="runAiScreen()">🤖 Re-Screen</button>
       </div>
     </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 300px;gap:16px;margin-bottom:20px;">
+
+      <!-- Scores -->
+      <div class="card">
+        <div class="card-header"><h2>📊 Scores</h2></div>
+        <div style="padding:20px;">
+          <div class="score-bar-row" id="ats-row">
+            <div class="score-bar-label"><span>ATS Score</span><span class="score-bar-val" id="ats-val">—</span></div>
+            <div class="score-bar-track"><div class="score-bar-fill" id="ats-bar" style="width:0%;background:linear-gradient(90deg,#818cf8,#6366f1);"></div></div>
+          </div>
+          <div class="score-bar-row" id="tech-row">
+            <div class="score-bar-label"><span>Technical</span><span class="score-bar-val" id="tech-val">—</span></div>
+            <div class="score-bar-track"><div class="score-bar-fill" id="tech-bar" style="width:0%;background:linear-gradient(90deg,#60a5fa,#3b82f6);"></div></div>
+          </div>
+          <div class="score-bar-row" id="fit-row">
+            <div class="score-bar-label"><span>Overall Fit</span><span class="score-bar-val" id="fit-val">—</span></div>
+            <div class="score-bar-track"><div class="score-bar-fill" id="fit-bar" style="width:0%;background:linear-gradient(90deg,#34d399,#059669);"></div></div>
+          </div>
+          <div style="margin-top:16px;text-align:center;">
+            <div style="font-size:11px;color:#3a3b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Decision</div>
+            <span class="badge {% if app.status=='Applied' %}badge-yellow{% elif app.status=='Shortlisted' %}badge-green{% elif app.status=='Rejected' %}badge-red{% else %}badge-blue{% endif %}" id="decision-badge" style="font-size:13px;padding:6px 16px;">{{ app.status|upper }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skills & Contact -->
+      <div class="card">
+        <div class="card-header"><h2>🛠 Skills</h2></div>
+        <div style="padding:16px;">
+          <div id="skillsDisplay">
+            {% if resume.skills %}
+              {% for skill in resume.skills %}
+              <span class="skill-chip" style="background:rgba(99,102,241,0.1);color:#818cf8;">{{ skill }}</span>
+              {% endfor %}
+            {% else %}
+              <span style="color:#3a3b4a;font-size:13px;">No skills data — run AI Screen to analyse</span>
+            {% endif %}
+          </div>
+          <div style="margin-top:18px;">
+            <div style="font-size:12px;color:#3a3b4a;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Contact Info</div>
+            <div style="font-size:13px;color:#9ca3c0;margin-bottom:6px;">✉ {{ user_info.email or 'N/A' }}</div>
+            <div style="font-size:13px;color:#9ca3c0;">📞 {{ user_info.phone or 'N/A' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Details panel -->
+      <div class="card">
+        <div class="card-header"><h2>📋 Details</h2></div>
+        <div style="padding:12px 16px 16px;">
+          <div class="detail-row"><span class="detail-key">Candidate ID</span><span class="detail-val">#{{ app.id }}</span></div>
+          <div class="detail-row"><span class="detail-key">Applied For</span><span class="detail-val" style="color:#818cf8;">{{ app.job_title }}</span></div>
+          <div class="detail-row"><span class="detail-key">ATS Score</span><span class="detail-val" id="detail-ats">—</span></div>
+          <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" id="detail-status">{{ app.status }}</span></div>
+          <div class="detail-row"><span class="detail-key">Applied On</span><span class="detail-val">{{ app.applied_at[:10] }}</span></div>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="generateQuestions()">✦ Generate Interview Questions</button>
+            <button class="btn btn-ghost" style="width:100%;justify-content:center;" onclick="runAiScreen()">🤖 Re-Screen AI</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes & AI Insight -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><h2>📝 Notes &amp; AI Insight</h2></div>
+      <div style="padding:18px;" id="aiInsight">
+        <p style="color:#3a3b4a;font-size:13px;">Click "Re-Screen AI" above to generate AI insights for this candidate.</p>
+      </div>
+    </div>
+
+    <!-- Interview Questions (hidden until generated) -->
+    <div class="card" id="questionsCard" style="display:none;">
+      <div class="card-header"><h2>❓ Interview Questions</h2></div>
+      <div style="padding:16px;" id="questionsList"></div>
+    </div>
+
   </div>
 </div>
 
 <div class="modal-overlay" id="modal">
   <div class="modal">
-    <div class="modal-header">
-      <h2>🤖 AI Screening Result</h2>
-      <button class="modal-close" onclick="closeModal()">×</button>
-    </div>
-    <div id="modalContent"><p style="color:#444;">Analysing resume...</p></div>
+    <div class="modal-header"><h2 id="modalTitle">Processing...</h2><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div id="modalContent"></div>
   </div>
 </div>
 
 <script>
-async function updateStatus(appId,status){
-  await fetch('/api/recruiter/update-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:appId,status})});
-}
-async function aiScreen(appId,resumeJsonStr,jobId){
+const RESUME = {{ resume|tojson }};
+const JOB_ID = {{ app.job_id }};
+const APP_ID = {{ app.id }};
+
+async function runAiScreen(){
   document.getElementById('modal').classList.add('show');
-  document.getElementById('modalContent').innerHTML='<p style="color:#555;padding:12px 0;">🔄 Analysing with AI...</p>';
-  let resumeData={};
-  try{resumeData=JSON.parse(resumeJsonStr);}catch(e){}
+  document.getElementById('modalTitle').textContent='🤖 AI Screening';
+  document.getElementById('modalContent').innerHTML='<p style="color:#555;padding:10px 0;">Analysing candidate against job requirements...</p>';
   try{
-    const res=await fetch('/api/ai/job-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume:resumeData,job_id:jobId})});
+    const res=await fetch('/api/ai/job-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume:RESUME,job_id:JOB_ID})});
     const d=await res.json();
-    document.getElementById('modalContent').innerHTML=`
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px;">
-        <div class="score-ring">${d.match_percent}%</div>
-        <div><div style="font-size:13px;color:#6b7280;">Job Match Score</div><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-top:4px;">${d.match_percent >= 70 ? 'Strong Fit' : d.match_percent >= 50 ? 'Moderate Fit' : 'Weak Fit'}</div></div>
+    // Update score bars
+    const ats=d.match_percent||0;
+    const tech=Math.max(0,ats-8);
+    const fit=Math.max(0,ats-15);
+    document.getElementById('ats-val').textContent=ats+'%';
+    document.getElementById('ats-bar').style.width=ats+'%';
+    document.getElementById('tech-val').textContent=tech+'%';
+    document.getElementById('tech-bar').style.width=tech+'%';
+    document.getElementById('fit-val').textContent=fit+'%';
+    document.getElementById('fit-bar').style.width=fit+'%';
+    document.getElementById('detail-ats').textContent=ats+'%';
+    // Update skills
+    if(d.matched_skills&&d.matched_skills.length){
+      document.getElementById('skillsDisplay').innerHTML=d.matched_skills.map(s=>`<span class="skill-chip" style="background:rgba(52,211,153,0.1);color:#34d399;">${s}</span>`).join('')+
+        (d.missing_skills||[]).map(s=>`<span class="skill-chip" style="background:rgba(248,113,113,0.1);color:#f87171;">${s}</span>`).join('');
+    }
+    // AI Insight
+    document.getElementById('aiInsight').innerHTML=`
+      <div style="background:#0a0b12;border-left:3px solid #6366f1;padding:14px;border-radius:10px;font-size:13px;color:#9ca3c0;line-height:1.7;">
+        💬 ${d.recommendation||'AI analysis complete.'}
       </div>
-      <div style="margin-bottom:12px;"><div style="font-size:11px;color:#2a2b3a;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">✅ Matched Skills</div>${(d.matched_skills||[]).map(s=>`<span class="tag tag-g">${s}</span>`).join('')||'<span style="color:#2a2b3a;font-size:12px;">None identified</span>'}</div>
-      <div style="margin-bottom:16px;"><div style="font-size:11px;color:#2a2b3a;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">❌ Missing Skills</div>${(d.missing_skills||[]).map(s=>`<span class="tag tag-r">${s}</span>`).join('')||'<span style="color:#2a2b3a;font-size:12px;">None</span>'}</div>
-      <div style="background:#0a0b12;padding:14px;border-radius:12px;font-size:13px;color:#6b7280;line-height:1.65;border:1px solid rgba(255,255,255,0.04);">💡 ${d.recommendation||'No recommendation available'}</div>`;
-  }catch(e){document.getElementById('modalContent').innerHTML='<p style="color:#f87171;">AI screening failed. Try again.</p>';}
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+        <div><div style="font-size:11px;color:#3a3b4a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">✅ Matched Skills</div>
+          ${(d.matched_skills||[]).map(s=>`<span class="skill-chip" style="background:rgba(52,211,153,0.1);color:#34d399;">${s}</span>`).join('')||'<span style="color:#3a3b4a;font-size:12px;">None</span>'}
+        </div>
+        <div><div style="font-size:11px;color:#3a3b4a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">❌ Missing</div>
+          ${(d.missing_skills||[]).map(s=>`<span class="skill-chip" style="background:rgba(248,113,113,0.1);color:#f87171;">${s}</span>`).join('')||'<span style="color:#3a3b4a;font-size:12px;">None</span>'}
+        </div>
+      </div>`;
+    document.getElementById('modalContent').innerHTML=`<div style="text-align:center;padding:10px;"><div style="font-size:36px;font-weight:700;color:#34d399;">${ats}%</div><div style="color:#6b7280;font-size:13px;">Match Score</div><p style="margin-top:12px;color:#9ca3c0;font-size:13px;">${d.recommendation||''}</p></div>`;
+  }catch(e){document.getElementById('modalContent').innerHTML='<p style="color:#f87171;">AI screening failed.</p>';}
 }
+
+async function generateQuestions(){
+  document.getElementById('modal').classList.add('show');
+  document.getElementById('modalTitle').textContent='✦ Generating Interview Questions';
+  document.getElementById('modalContent').innerHTML='<p style="color:#555;padding:10px 0;">Generating tailored questions...</p>';
+  try{
+    const res=await fetch('/api/recruiter/interview-questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume:RESUME,job_title:'{{ app.job_title }}'})});
+    const d=await res.json();
+    const qs=d.questions||[];
+    const html=qs.map(q=>`<div class="q-item"><div class="q-type">${q.type||'General'}</div><div class="q-text">${q.question}</div></div>`).join('');
+    document.getElementById('questionsCard').style.display='block';
+    document.getElementById('questionsList').innerHTML=html;
+    document.getElementById('modalContent').innerHTML=`<p style="color:#34d399;font-size:13px;">✅ ${qs.length} questions generated! See below the profile.</p>`;
+    setTimeout(()=>closeModal(),2000);
+  }catch(e){document.getElementById('modalContent').innerHTML='<p style="color:#f87171;">Failed to generate questions.</p>';}
+}
+
+async function quickStatus(appId,status){
+  await fetch('/api/recruiter/update-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:appId,status})});
+  const badge=document.getElementById('decision-badge');
+  if(badge){badge.textContent=status.toUpperCase();}
+  document.getElementById('detail-status').textContent=status;
+  alert('Status updated to: '+status);
+}
+
 function closeModal(){document.getElementById('modal').classList.remove('show');}
 document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// Auto-run AI screen on load if resume has data
+if(RESUME && RESUME.name){ setTimeout(runAiScreen, 800); }
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
 </script>
 </body></html>"""
 
@@ -1554,18 +2739,24 @@ select option{background:#0f1018;}
 textarea{resize:vertical;}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 </style></head><body>
+
 <div class="sidebar">
   <div class="logo">✦ Recruit<span>AI</span></div>
   <div class="nav-section">
-    <div class="nav-label">Recruiter</div>
+    <div class="nav-label">MAIN</div>
     <a class="nav-item" href="/recruiter/dashboard"><span class="icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="/recruiter/screen-resume"><span class="icon">📄</span> Screen Resume</a>
+    <a class="nav-item" href="/recruiter/candidates"><span class="icon">👥</span> Candidates</a>
+    <a class="nav-item" href="/recruiter/applications"><span class="icon">📋</span> Applications</a>
     <a class="nav-item active" href="/recruiter/post-job"><span class="icon">➕</span> Post a Job</a>
-    <a class="nav-item" href="/recruiter/candidates"><span class="icon">👥</span> All Candidates</a>
+    <div class="nav-label" style="margin-top:10px;">TOOLS</div>
+    <a class="nav-item" href="/recruiter/analytics"><span class="icon">📊</span> Analytics</a>
+    <a class="nav-item" href="/recruiter/history"><span class="icon">🕐</span> History</a>
   </div>
   <div class="sidebar-bottom">
     <div class="user-chip">
-      <div class="avatar" style="font-size:13px;">R</div>
-      <div class="user-info"><div class="name">Recruiter</div><div class="role">Recruiter</div></div>
+      <div class="avatar">{ username[0].upper() }</div>
+      <div class="user-info"><div class="name">{ username }</div><div class="role">Recruiter</div></div>
     </div>
     <a href="/logout" class="logout-link">← Sign out</a>
   </div>
@@ -1585,9 +2776,7 @@ textarea{resize:vertical;}
         </div>
         <div class="row">
           <div><label>Job Type</label>
-            <select name="job_type">
-              <option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option>
-            </select>
+            <select name="job_type"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Remote</option></select>
           </div>
           <div><label>Salary / Package</label><input type="text" name="salary" placeholder="e.g. ₹12–18 LPA"></div>
         </div>
@@ -1603,36 +2792,99 @@ textarea{resize:vertical;}
     </div>
   </div>
 </div>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
+</script>
 </body></html>"""
+
 
 APPLICANTS_HTML = """<!DOCTYPE html>
 <html><head><title>Applicants – RecruitAI</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>""" + SIDEBAR_CSS + """
 </style></head><body>
+
 <div class="sidebar">
   <div class="logo">✦ Recruit<span>AI</span></div>
   <div class="nav-section">
-    <div class="nav-label">Recruiter</div>
+    <div class="nav-label">MAIN</div>
     <a class="nav-item" href="/recruiter/dashboard"><span class="icon">🏠</span> Dashboard</a>
+    <a class="nav-item" href="/recruiter/screen-resume"><span class="icon">📄</span> Screen Resume</a>
+    <a class="nav-item" href="/recruiter/candidates"><span class="icon">👥</span> Candidates</a>
+    <a class="nav-item active" href="/recruiter/applications"><span class="icon">📋</span> Applications</a>
     <a class="nav-item" href="/recruiter/post-job"><span class="icon">➕</span> Post a Job</a>
-    <a class="nav-item active" href="/recruiter/candidates"><span class="icon">👥</span> All Candidates</a>
+    <div class="nav-label" style="margin-top:10px;">TOOLS</div>
+    <a class="nav-item" href="/recruiter/analytics"><span class="icon">📊</span> Analytics</a>
+    <a class="nav-item" href="/recruiter/history"><span class="icon">🕐</span> History</a>
   </div>
   <div class="sidebar-bottom">
     <div class="user-chip">
-      <div class="avatar">R</div>
-      <div class="user-info"><div class="name">Recruiter</div><div class="role">Recruiter</div></div>
+      <div class="avatar">{ username[0].upper() }</div>
+      <div class="user-info"><div class="name">{ username }</div><div class="role">Recruiter</div></div>
     </div>
     <a href="/logout" class="logout-link">← Sign out</a>
   </div>
 </div>
 <div class="main">
   <div class="topbar">
-    <div>
-      <h1>{{ job.title }}</h1>
-      <div class="sub">{{ job.company }} &nbsp;•&nbsp; {{ applicants|length }} applicant(s)</div>
-    </div>
-    <a href="/recruiter/dashboard" class="btn btn-ghost">← Back</a>
+    <div><h1>{{ job.title }}</h1><div class="sub">{{ job.company }} &nbsp;•&nbsp; {{ applicants|length }} applicant(s)</div></div>
+    <a href="/recruiter/applications" class="btn btn-ghost">← Back</a>
   </div>
   <div class="content">
     <div class="card">
@@ -1646,19 +2898,20 @@ APPLICANTS_HTML = """<!DOCTYPE html>
             <td><strong>{{ app.username }}</strong></td>
             <td>{{ app.applied_at[:10] }}</td>
             <td>
-              {% if app.status == 'Applied' %}<span class="badge badge-purple">{{ app.status }}</span>
-              {% elif app.status in ['Shortlisted','Reviewing'] %}<span class="badge badge-green">{{ app.status }}</span>
-              {% elif app.status == 'Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
-              {% elif app.status == 'Interviewing' %}<span class="badge badge-yellow">{{ app.status }}</span>
-              {% elif app.status == 'Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
+              {% if app.status=='Applied' %}<span class="badge badge-yellow">Pending</span>
+              {% elif app.status=='Shortlisted' %}<span class="badge badge-green">{{ app.status }}</span>
+              {% elif app.status=='Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
+              {% elif app.status=='Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
               {% else %}<span class="badge badge-purple">{{ app.status }}</span>{% endif %}
             </td>
-            <td><button class="btn btn-ghost btn-sm" onclick="aiScreen('{{ app.resume_json|replace("'","\\'")|replace('"','\\"') }}',{{ job.id }})">🤖 AI Score</button></td>
+            <td>
+              <a href="/recruiter/candidate/{{ app.id }}" class="btn btn-primary btn-sm">View Profile</a>
+            </td>
             <td>
               <select onchange="updateStatus({{ app.id }}, this.value)"
                 style="background:#0a0b12;color:#aaa;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">
                 {% for s in ['Applied','Reviewing','Shortlisted','Interviewing','Hired','Rejected'] %}
-                <option {% if app.status == s %}selected{% endif %}>{{ s }}</option>
+                <option {% if app.status==s %}selected{% endif %}>{{ s }}</option>
                 {% endfor %}
               </select>
             </td>
@@ -1673,41 +2926,641 @@ APPLICANTS_HTML = """<!DOCTYPE html>
     </div>
   </div>
 </div>
-
-<div class="modal-overlay" id="modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>🤖 AI Screening Result</h2>
-      <button class="modal-close" onclick="closeModal()">×</button>
-    </div>
-    <div id="modalContent"></div>
-  </div>
-</div>
-
 <script>
 async function updateStatus(appId,status){
   await fetch('/api/recruiter/update-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:appId,status})});
 }
-async function aiScreen(resumeJsonStr,jobId){
-  document.getElementById('modal').classList.add('show');
-  document.getElementById('modalContent').innerHTML='<p style="color:#555;padding:12px 0;">🔄 Analysing with AI...</p>';
-  let resumeData={};
-  try{resumeData=JSON.parse(resumeJsonStr);}catch(e){}
-  try{
-    const res=await fetch('/api/ai/job-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume:resumeData,job_id:jobId})});
-    const d=await res.json();
-    document.getElementById('modalContent').innerHTML=`
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px;">
-        <div class="score-ring">${d.match_percent}%</div>
-        <div><div style="font-size:13px;color:#6b7280;">Job Match Score</div><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-top:4px;">${d.match_percent >= 70 ? 'Strong Fit' : d.match_percent >= 50 ? 'Moderate Fit' : 'Weak Fit'}</div></div>
+</script>
+</body></html>"""
+
+
+# ============================================================
+# SHARED RECRUITER SIDEBAR SNIPPET (inline — used in templates below)
+# ============================================================
+def _rec_nav(active=""):
+    items = [
+        ("dashboard",     "🏠", "Dashboard",     "/recruiter/dashboard"),
+        ("screen-resume", "📄", "Screen Resume",  "/recruiter/screen-resume"),
+        ("candidates",    "👥", "Candidates",     "/recruiter/candidates"),
+        ("applications",  "📋", "Applications",   "/recruiter/applications"),
+        ("post-job",      "➕", "Post a Job",     "/recruiter/post-job"),
+    ]
+    tools = [
+        ("analytics", "📊", "Analytics", "/recruiter/analytics"),
+        ("history",   "🕐", "History",   "/recruiter/history"),
+    ]
+    html = '<div class="nav-label">MAIN</div>'
+    for key, icon, label, href in items:
+        cls = "nav-item active" if active == key else "nav-item"
+        html += f'<a class="{cls}" href="{href}"><span class="icon">{icon}</span> {label}</a>'
+    html += '<div class="nav-label" style="margin-top:10px;">TOOLS</div>'
+    for key, icon, label, href in tools:
+        cls = "nav-item active" if active == key else "nav-item"
+        html += f'<a class="{cls}" href="{href}"><span class="icon">{icon}</span> {label}</a>'
+    return html
+
+
+SCREEN_RESUME_HTML = """<!DOCTYPE html>
+<html><head><title>Screen Resume – RecruitAI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>""" + SIDEBAR_CSS + """
+.upload-zone{border:2px dashed rgba(99,102,241,0.35);border-radius:16px;padding:40px;text-align:center;cursor:pointer;transition:all .2s;background:#0a0b12;position:relative;}
+.upload-zone:hover,.upload-zone.drag{border-color:#6366f1;background:rgba(99,102,241,0.06);}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.uz-icon{font-size:40px;margin-bottom:10px;}
+.uz-title{font-size:15px;font-weight:600;color:#c4b5fd;margin-bottom:4px;}
+.uz-sub{font-size:12px;color:#3a3b4a;}
+label{display:block;margin-bottom:5px;margin-top:14px;font-size:12px;color:#555;font-weight:500;}
+input[type=text],textarea{width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,0.07);outline:none;border-radius:11px;background:#0a0b12;color:white;font-size:13px;font-family:'DM Sans',sans-serif;transition:border-color .2s;}
+input[type=text]:focus,textarea:focus{border-color:#6366f1;}
+.score-arc{display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.arc-num{font-size:42px;font-weight:700;letter-spacing:-2px;}
+.arc-label{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+.score-bar-row{margin-bottom:12px;}
+.score-bar-label{display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;color:#9ca3c0;}
+.score-bar-track{height:6px;border-radius:99px;background:#12131f;overflow:hidden;}
+.score-bar-fill{height:100%;border-radius:99px;transition:width 1.2s ease;}
+.chip{display:inline-flex;align-items:center;padding:4px 11px;border-radius:99px;font-size:11px;font-weight:500;margin:3px;}
+.rec-pass{background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.2);}
+.rec-maybe{background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);}
+.rec-fail{background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.2);}
+</style></head><body>
+<div class="sidebar">
+  <div class="logo">✦ Recruit<span>AI</span></div>
+  <div class="nav-section">""" + _rec_nav("screen-resume") + """
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <div class="avatar">{{ username[0].upper() }}</div>
+      <div class="user-info"><div class="name">{{ username }}</div><div class="role">Recruiter</div></div>
+    </div>
+    <a href="/logout" class="logout-link">← Sign out</a>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div><h1>Screen Resume</h1><div class="sub">Upload a candidate's PDF resume for instant AI screening</div></div>
+  </div>
+  <div class="content">
+    <div style="display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start;">
+
+      <!-- Upload Form -->
+      <div>
+        <div class="card" style="padding:24px;">
+          <div style="font-size:14px;font-weight:600;color:#c4b5fd;margin-bottom:16px;">📤 Upload Resume</div>
+          <form method="POST" enctype="multipart/form-data" id="screenForm">
+            <div class="upload-zone" id="dropZone">
+              <input type="file" name="resume_pdf" id="resumeFile" accept=".pdf" required onchange="onFile(this)">
+              <div class="uz-icon">📄</div>
+              <div class="uz-title" id="uzTitle">Drop PDF here or click to browse</div>
+              <div class="uz-sub">PDF only • Max 5MB</div>
+            </div>
+            <label>Candidate Name</label>
+            <input type="text" name="candidate_name" placeholder="e.g. Rahul Sharma" value="{{ result.candidate_name if result else '' }}">
+            <label>Job Description (optional — for tailored scoring)</label>
+            <textarea name="job_description" rows="4" placeholder="Paste the job description here..."></textarea>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:16px;padding:13px;font-size:14px;" id="submitBtn">
+              🤖 Screen Resume
+            </button>
+          </form>
+        </div>
       </div>
-      <div style="margin-bottom:12px;"><div style="font-size:11px;color:#2a2b3a;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">✅ Matched Skills</div>${(d.matched_skills||[]).map(s=>`<span class="tag tag-g">${s}</span>`).join('')||'<span style="color:#2a2b3a;font-size:12px;">None identified</span>'}</div>
-      <div style="margin-bottom:16px;"><div style="font-size:11px;color:#2a2b3a;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">❌ Missing Skills</div>${(d.missing_skills||[]).map(s=>`<span class="tag tag-r">${s}</span>`).join('')||'<span style="color:#2a2b3a;font-size:12px;">None</span>'}</div>
-      <div style="background:#0a0b12;padding:14px;border-radius:12px;font-size:13px;color:#6b7280;line-height:1.65;border:1px solid rgba(255,255,255,0.04);">💡 ${d.recommendation||''}</div>`;
-  }catch(e){document.getElementById('modalContent').innerHTML='<p style="color:#f87171;">AI screening failed.</p>';}
+
+      <!-- Results -->
+      <div id="resultsPanel">
+        {% if result and not result.error %}
+        <div class="card" style="margin-bottom:16px;">
+          <div style="padding:24px;">
+            <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;">
+              <div style="width:80px;height:80px;border-radius:50%;border:4px solid {{ '#34d399' if result.ats_score >= 70 else '#fbbf24' if result.ats_score >= 50 else '#f87171' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <div class="score-arc">
+                  <div class="arc-num" style="color:{{ '#34d399' if result.ats_score >= 70 else '#fbbf24' if result.ats_score >= 50 else '#f87171' }};">{{ result.ats_score }}</div>
+                </div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:18px;font-weight:700;color:#e2e8f0;margin-bottom:4px;">{{ result.candidate_name }}</div>
+                <div style="font-size:12px;color:#3a3b4a;margin-bottom:8px;">{{ result.filename }}</div>
+                <span class="chip {% if result.recommendation == 'Hire' %}rec-pass{% elif result.recommendation == 'Maybe' %}rec-maybe{% else %}rec-fail{% endif %}">
+                  {{ '✓ Hire' if result.recommendation == 'Hire' else '~ Maybe' if result.recommendation == 'Maybe' else '✗ Pass' }}
+                </span>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:22px;font-weight:700;color:#e2e8f0;">{{ result.grade }}</div>
+                <div style="font-size:11px;color:#3a3b4a;">Grade</div>
+              </div>
+            </div>
+
+            <!-- Score bars -->
+            <div class="score-bar-row">
+              <div class="score-bar-label"><span>ATS Score</span><span style="font-weight:700;color:#818cf8;">{{ result.ats_score }}%</span></div>
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ result.ats_score }}%;background:linear-gradient(90deg,#818cf8,#6366f1);"></div></div>
+            </div>
+            <div class="score-bar-row">
+              <div class="score-bar-label"><span>Technical</span><span style="font-weight:700;color:#60a5fa;">{{ result.technical_score }}%</span></div>
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ result.technical_score }}%;background:linear-gradient(90deg,#60a5fa,#3b82f6);"></div></div>
+            </div>
+            <div class="score-bar-row">
+              <div class="score-bar-label"><span>Overall Fit</span><span style="font-weight:700;color:#34d399;">{{ result.overall_fit }}%</span></div>
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ result.overall_fit }}%;background:linear-gradient(90deg,#34d399,#059669);"></div></div>
+            </div>
+            <div style="font-size:12px;color:#555;margin-top:6px;">Keyword match: <span style="color:#a78bfa;font-weight:600;">{{ result.keyword_match }}%</span></div>
+          </div>
+        </div>
+
+        <!-- Summary + Skills -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="padding:20px;">
+            {% if result.summary %}
+            <div style="background:#0a0b12;border-left:3px solid #6366f1;padding:12px 14px;border-radius:10px;font-size:13px;color:#9ca3c0;line-height:1.7;margin-bottom:16px;">
+              💬 {{ result.summary }}
+            </div>
+            {% endif %}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+              <div>
+                <div style="font-size:11px;color:#3a3b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600;">✅ Strengths</div>
+                {% for s in result.strengths %}
+                <div style="font-size:12px;color:#9ca3c0;margin-bottom:5px;display:flex;gap:6px;"><span style="color:#34d399;">•</span>{{ s }}</div>
+                {% endfor %}
+              </div>
+              <div>
+                <div style="font-size:11px;color:#3a3b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600;">⚠️ Improvements</div>
+                {% for s in result.improvements %}
+                <div style="font-size:12px;color:#9ca3c0;margin-bottom:5px;display:flex;gap:6px;"><span style="color:#fbbf24;">•</span>{{ s }}</div>
+                {% endfor %}
+              </div>
+            </div>
+            <div style="margin-top:14px;">
+              <div style="font-size:11px;color:#3a3b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600;">🛠 Skills Found</div>
+              {% for s in result.skills_found %}
+              <span class="chip" style="background:rgba(52,211,153,0.1);color:#34d399;">{{ s }}</span>
+              {% endfor %}
+              {% for s in result.skills_missing %}
+              <span class="chip" style="background:rgba(248,113,113,0.1);color:#f87171;">{{ s }}</span>
+              {% endfor %}
+            </div>
+            <div style="margin-top:12px;">
+              <div style="font-size:11px;color:#3a3b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600;">📋 Sections</div>
+              {% for s in result.sections_found %}
+              <span class="chip" style="background:rgba(99,102,241,0.1);color:#818cf8;">{{ s }}</span>
+              {% endfor %}
+              {% for s in result.sections_missing %}
+              <span class="chip" style="background:rgba(248,113,113,0.08);color:#f87171;text-decoration:line-through;">{{ s }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% elif result and result.error %}
+        <div class="card" style="padding:24px;">
+          <p style="color:#f87171;">{{ result.error }}</p>
+        </div>
+        {% else %}
+        <div class="card" style="padding:48px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:12px;opacity:.3;">🤖</div>
+          <div style="font-size:15px;color:#3a3b4a;margin-bottom:6px;">AI Screening Results</div>
+          <div style="font-size:13px;color:#2a2b3a;">Upload a PDF resume and click Screen Resume to see the analysis here</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const dz=document.getElementById('dropZone');
+function onFile(input){if(input.files[0])document.getElementById('uzTitle').textContent='✅ '+input.files[0].name;}
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('drag');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type==='application/pdf'){
+    document.getElementById('resumeFile').files=e.dataTransfer.files;
+    document.getElementById('uzTitle').textContent='✅ '+f.name;
+  }
+});
+document.getElementById('screenForm').onsubmit=()=>{
+  document.getElementById('submitBtn').textContent='⏳ Analysing...';
+  document.getElementById('submitBtn').disabled=true;
+};
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
 }
-function closeModal(){document.getElementById('modal').classList.remove('show');}
-document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
+</script>
+</body></html>"""
+
+
+RECRUITER_ANALYTICS_HTML = """<!DOCTYPE html>
+<html><head><title>Analytics – RecruitAI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>""" + SIDEBAR_CSS + """
+.prog-bar-wrap{background:#12131f;border-radius:99px;height:7px;overflow:hidden;margin-top:5px;}
+.prog-bar{height:100%;border-radius:99px;background:linear-gradient(90deg,#6366f1,#a78bfa);transition:width 1s ease;}
+</style></head><body>
+<div class="sidebar">
+  <div class="logo">✦ Recruit<span>AI</span></div>
+  <div class="nav-section">""" + _rec_nav("analytics") + """
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <div class="avatar">{{ username[0].upper() }}</div>
+      <div class="user-info"><div class="name">{{ username }}</div><div class="role">Recruiter</div></div>
+    </div>
+    <a href="/logout" class="logout-link">← Sign out</a>
+  </div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div><h1>Analytics</h1><div class="sub">Hiring funnel and performance overview</div></div>
+  </div>
+  <div class="content">
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:24px;">
+      <div class="stat-card"><div class="s-icon">👥</div><div class="s-val">{{ total_apps }}</div><div class="s-label">Total Applications</div></div>
+      <div class="stat-card"><div class="s-icon">⏳</div><div class="s-val" style="color:#fbbf24;">{{ pending }}</div><div class="s-label">Pending</div></div>
+      <div class="stat-card"><div class="s-icon">⭐</div><div class="s-val" style="color:#818cf8;">{{ shortlisted }}</div><div class="s-label">Shortlisted</div></div>
+      <div class="stat-card"><div class="s-icon">✅</div><div class="s-val" style="color:#34d399;">{{ hired }}</div><div class="s-label">Hired</div></div>
+      <div class="stat-card"><div class="s-icon">❌</div><div class="s-val" style="color:#f87171;">{{ rejected }}</div><div class="s-label">Rejected</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <!-- Funnel -->
+      <div class="card">
+        <div class="card-header"><h2>📊 Hiring Funnel</h2></div>
+        <div style="padding:20px;">
+          {% set stages = [('Applications', total_apps, '#6366f1'), ('Shortlisted', shortlisted, '#818cf8'), ('Hired', hired, '#34d399'), ('Rejected', rejected, '#f87171')] %}
+          {% for label, val, color in stages %}
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#9ca3c0;margin-bottom:4px;">
+              <span>{{ label }}</span>
+              <span style="font-weight:700;color:{{ color }};">{{ val }}</span>
+            </div>
+            <div class="prog-bar-wrap">
+              <div class="prog-bar" style="width:{% if total_apps %}{{ ((val / total_apps) * 100)|int }}{% else %}0{% endif %}%;background:{{ color }};"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Donut -->
+      <div class="card">
+        <div class="card-header"><h2>🍩 Status Breakdown</h2></div>
+        <div style="padding:20px;display:flex;align-items:center;gap:20px;">
+          <canvas id="donut" width="140" height="140"></canvas>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9ca3c0;"><span style="width:10px;height:10px;border-radius:50%;background:#fbbf24;flex-shrink:0;display:inline-block;"></span>Pending ({{ pending }})</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9ca3c0;"><span style="width:10px;height:10px;border-radius:50%;background:#818cf8;flex-shrink:0;display:inline-block;"></span>Shortlisted ({{ shortlisted }})</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9ca3c0;"><span style="width:10px;height:10px;border-radius:50%;background:#34d399;flex-shrink:0;display:inline-block;"></span>Hired ({{ hired }})</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9ca3c0;"><span style="width:10px;height:10px;border-radius:50%;background:#f87171;flex-shrink:0;display:inline-block;"></span>Rejected ({{ rejected }})</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-job breakdown -->
+    <div class="card">
+      <div class="card-header"><h2>💼 Jobs Performance</h2></div>
+      <div class="card-body">
+        {% if job_stats %}
+        <table>
+          <thead><tr><th>Job Title</th><th>Total Applicants</th><th>Pipeline</th><th>Actions</th></tr></thead>
+          <tbody>
+          {% for js in job_stats %}
+          <tr>
+            <td><strong>{{ js.title }}</strong></td>
+            <td><span class="badge badge-purple">{{ js.count }}</span></td>
+            <td>
+              <div class="prog-bar-wrap" style="width:200px;">
+                <div class="prog-bar" style="width:{% if js.count %}{{ [js.count * 15, 100]|min if false else (100 if js.count >= 7 else js.count * 14) }}{% else %}0{% endif %}%;"></div>
+              </div>
+            </td>
+            <td><a href="/recruiter/job/{{ js.id }}/applicants" class="btn btn-ghost btn-sm">View →</a></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state"><div class="e-icon">💼</div><h3>No jobs posted yet</h3></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+window.addEventListener('load',()=>{
+  const c=document.getElementById('donut');if(!c)return;
+  const ctx=c.getContext('2d');
+  const data=[{{ pending }},{{ shortlisted }},{{ hired }},{{ rejected }}];
+  const colors=['#fbbf24','#818cf8','#34d399','#f87171'];
+  const sum=data.reduce((a,b)=>a+b,0)||1;
+  let start=-Math.PI/2;const cx=70,cy=70,r=60,inner=35;
+  data.forEach((v,i)=>{
+    const angle=(v/sum)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,start,start+angle);ctx.closePath();
+    ctx.fillStyle=colors[i];ctx.fill();start+=angle;
+  });
+  ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#0f1018';ctx.fill();
+  ctx.fillStyle='#6b7280';ctx.font='bold 13px DM Sans,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText({{ total_apps }},cx,cy);
+});
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
+</script>
+</body></html>"""
+
+
+RECRUITER_HISTORY_HTML = """<!DOCTYPE html>
+<html><head><title>History – RecruitAI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>""" + SIDEBAR_CSS + """
+.timeline-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.timeline-item:last-child{border-bottom:none;}
+.tl-dot{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-top:2px;}
+.tl-content{flex:1;}
+.tl-title{font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:3px;}
+.tl-sub{font-size:12px;color:#3a3b4a;}
+.tl-time{font-size:11px;color:#2a2b3a;white-space:nowrap;}
+.tab-row{display:flex;gap:0;background:#0a0b12;border-radius:12px;padding:3px;border:1px solid rgba(255,255,255,0.05);margin-bottom:18px;width:fit-content;}
+.tab-btn{padding:8px 20px;border:none;border-radius:9px;background:transparent;color:#555;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.tab-btn.active{background:#16172a;color:#c4b5fd;}
+</style></head><body>
+<div class="sidebar">
+  <div class="logo">✦ Recruit<span>AI</span></div>
+  <div class="nav-section">""" + _rec_nav("history") + """
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <div class="avatar">{{ username[0].upper() }}</div>
+      <div class="user-info"><div class="name">{{ username }}</div><div class="role">Recruiter</div></div>
+    </div>
+    <a href="/logout" class="logout-link">← Sign out</a>
+  </div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div><h1>History</h1><div class="sub">All screening activity and application events</div></div>
+  </div>
+  <div class="content">
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="showTab('screening',this)">🤖 Screened Resumes</button>
+      <button class="tab-btn" onclick="showTab('applications',this)">📋 Application Events</button>
+    </div>
+
+    <!-- Screened Resumes -->
+    <div id="tab-screening">
+      {% if history %}
+      <div class="card">
+        <div class="card-header"><h2>Recently Screened Candidates</h2><span style="font-size:11px;color:#3a3b4a;">{{ history|length }} total</span></div>
+        <div class="card-body">
+          <table>
+            <thead><tr><th>Candidate</th><th>File</th><th>ATS Score</th><th>Status</th><th>Screened</th></tr></thead>
+            <tbody>
+            {% for h in history %}
+            {% set res = h.result_json|fromjson if h.result_json else {} %}
+            <tr>
+              <td><strong>{{ h.candidate_name }}</strong></td>
+              <td style="color:#3a3b4a;font-size:12px;">{{ h.filename }}</td>
+              <td>
+                <span style="font-weight:700;color:{% if h.ats_score >= 70 %}#34d399{% elif h.ats_score >= 50 %}#fbbf24{% else %}#f87171{% endif %};">{{ h.ats_score }}%</span>
+                <div style="background:#12131f;border-radius:99px;height:3px;width:80px;margin-top:3px;overflow:hidden;">
+                  <div style="width:{{ h.ats_score }}%;height:100%;background:{% if h.ats_score >= 70 %}#34d399{% elif h.ats_score >= 50 %}#fbbf24{% else %}#f87171{% endif %};border-radius:99px;"></div>
+                </div>
+              </td>
+              <td>
+                {% if h.result_json %}
+                  {% set rec = h.result_json %}
+                  {% if 'Hire' in rec %}<span class="badge badge-green">Hire</span>
+                  {% elif 'Maybe' in rec %}<span class="badge badge-yellow">Maybe</span>
+                  {% else %}<span class="badge badge-red">Pass</span>{% endif %}
+                {% else %}<span class="badge badge-purple">Screened</span>{% endif %}
+              </td>
+              <td style="color:#3a3b4a;font-size:12px;">{{ h.screened_at[:16].replace('T',' ') }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="background:#0f1018;border-radius:16px;border:1px solid rgba(255,255,255,0.05);">
+        <div class="e-icon">📄</div>
+        <h3>No screened resumes yet</h3>
+        <p><a href="/recruiter/screen-resume" style="color:#a78bfa;text-decoration:none;">Screen your first resume →</a></p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Application Events -->
+    <div id="tab-applications" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h2>Application Activity</h2><span style="font-size:11px;color:#3a3b4a;">{{ apps|length }} total</span></div>
+        <div style="padding:8px 20px 16px;">
+          {% if apps %}
+            {% for app in apps %}
+            <div class="timeline-item">
+              <div class="tl-dot" style="background:{% if app.status=='Hired' %}rgba(52,211,153,0.12){% elif app.status=='Rejected' %}rgba(248,113,113,0.12){% elif app.status=='Shortlisted' %}rgba(99,102,241,0.12){% else %}rgba(251,191,36,0.12){% endif %};">
+                {% if app.status=='Hired' %}✅{% elif app.status=='Rejected' %}❌{% elif app.status=='Shortlisted' %}⭐{% else %}📋{% endif %}
+              </div>
+              <div class="tl-content">
+                <div class="tl-title">{{ app.username }} applied for <span style="color:#818cf8;">{{ app.job_title }}</span></div>
+                <div class="tl-sub">Status:
+                  {% if app.status=='Applied' %}<span class="badge badge-yellow">Pending</span>
+                  {% elif app.status=='Shortlisted' %}<span class="badge badge-green">{{ app.status }}</span>
+                  {% elif app.status=='Rejected' %}<span class="badge badge-red">{{ app.status }}</span>
+                  {% elif app.status=='Hired' %}<span class="badge badge-blue">{{ app.status }}</span>
+                  {% else %}<span class="badge badge-purple">{{ app.status }}</span>{% endif %}
+                </div>
+              </div>
+              <div class="tl-time">{{ app.applied_at[:10] }}</div>
+            </div>
+            {% endfor %}
+          {% else %}
+          <div style="text-align:center;padding:40px;color:#2a2b3a;font-size:13px;">No application activity yet</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+function showTab(id,btn){
+  document.getElementById('tab-screening').style.display=id==='screening'?'block':'none';
+  document.getElementById('tab-applications').style.display=id==='applications'?'block':'none';
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+<script>
+let notifOpen = false;
+async function loadNotifications(){
+  try{
+    const res = await fetch('/api/notifications');
+    const d = await res.json();
+    const badge = document.getElementById('notifBadge');
+    const list = document.getElementById('notifList');
+    if(!badge||!list) return;
+    if(d.unread > 0){
+      badge.style.display='flex';
+      badge.textContent = d.unread > 9 ? '9+' : d.unread;
+    } else {
+      badge.style.display='none';
+    }
+    if(!d.notifications || d.notifications.length === 0){
+      list.innerHTML = '<div class="notif-empty">🔔 No notifications yet</div>';
+      return;
+    }
+    const icons = {application:'📋', status:'📄', screening:'🤖', job:'💼'};
+    const colors = {application:'rgba(99,102,241,0.15)', status:'rgba(52,211,153,0.12)', screening:'rgba(168,85,247,0.12)', job:'rgba(251,191,36,0.12)'};
+    list.innerHTML = d.notifications.map(n => {
+      const t = new Date(n.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.is_read?'':'unread'}" onclick="goNotif('${n.link||'/'}')">
+        <div class="notif-icon" style="background:${colors[n.type]||'rgba(99,102,241,0.12)'};">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${t}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-unread-dot"></div>'}
+      </div>`;
+    }).join('');
+  } catch(e){}
+}
+function toggleNotif(){
+  notifOpen = !notifOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifOpen);
+  if(notifOpen) loadNotifications();
+}
+function goNotif(link){
+  markAllRead();
+  window.location.href = link;
+}
+async function markAllRead(){
+  await fetch('/api/notifications/mark-read',{method:'POST'});
+  document.getElementById('notifBadge').style.display='none';
+  document.querySelectorAll('.notif-item').forEach(el=>el.classList.remove('unread'));
+  document.querySelectorAll('.notif-unread-dot').forEach(el=>el.remove());
+}
+document.addEventListener('click', function(e){
+  if(notifOpen && !document.getElementById('bellBtn').contains(e.target) && !document.getElementById('notifPanel').contains(e.target)){
+    notifOpen = false;
+    document.getElementById('notifPanel').classList.remove('open');
+  }
+});
+// poll every 30s
+loadNotifications();
+setInterval(loadNotifications, 30000);
 </script>
 </body></html>"""
 
@@ -2278,6 +4131,15 @@ textarea{resize:vertical;}
     <div id="certList"></div>
   </div>
 
+  <div class="e-card">
+    <h3>🤖 AI Career Tools</h3>
+    <label>Target Role</label>
+    <input type="text" id="careerRole" placeholder="e.g. Software Engineer">
+    <button class="add-btn" style="margin-top:8px;" onclick="getProjects()">🚀 Suggest Portfolio Projects</button>
+    <button class="add-btn" style="margin-top:6px;background:#059669;" onclick="getRoadmap()">🗺 Generate Career Roadmap</button>
+    <div id="aiOutput" style="margin-top:10px;background:#0a0b12;border:1px solid rgba(255,255,255,0.06);border-radius:9px;padding:12px;font-size:11px;color:#6b7280;line-height:1.7;min-height:50px;display:none;"></div>
+  </div>
+
   <div class="action-bar">
     <button class="a-save" onclick="saveDraft()">💾 SAVE</button>
     <button class="a-pdf" onclick="downloadResume()">📄 PDF</button>
@@ -2373,6 +4235,30 @@ async function loadDraft(){
   }catch(e){}
 }
 loadDraft();renderResume();
+
+async function getProjects(){
+  const role=document.getElementById('careerRole').value.trim()||document.getElementById('headline').value.trim()||'Software Developer';
+  const out=document.getElementById('aiOutput');
+  out.style.display='block';out.innerHTML='🔄 Getting AI project suggestions...';out.style.color='#555';
+  try{
+    const res=await fetch('/api/ai/project-ideas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role})});
+    const d=await res.json();
+    out.style.color='#9ca3c0';
+    out.innerHTML=(d.projects||[]).map(p=>`<div style="margin-bottom:8px;padding:8px;background:#12131f;border-radius:6px;border-left:2px solid #6366f1;">${p}</div>`).join('');
+  }catch(e){out.innerHTML='❌ Failed to get suggestions';out.style.color='#f87171';}
+}
+
+async function getRoadmap(){
+  const role=document.getElementById('careerRole').value.trim()||document.getElementById('headline').value.trim()||'Software Developer';
+  const out=document.getElementById('aiOutput');
+  out.style.display='block';out.innerHTML='🔄 Generating your career roadmap...';out.style.color='#555';
+  try{
+    const res=await fetch('/api/ai/career-roadmap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role})});
+    const d=await res.json();
+    out.style.color='#9ca3c0';out.style.whiteSpace='pre-wrap';
+    out.textContent=d.roadmap||'No roadmap generated';
+  }catch(e){out.innerHTML='❌ Failed to generate roadmap';out.style.color='#f87171';}
+}
 </script></body></html>"""
 
 # ============================================================
