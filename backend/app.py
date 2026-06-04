@@ -5,6 +5,8 @@ import docx as docxlib
 import json
 import sqlite3
 import requests
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime
 from io import BytesIO
 
@@ -65,8 +67,9 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 app.jinja_env.filters['fromjson'] = lambda s: json.loads(s) if s else {}
 
-GROQ_KEY = "gsk_Xpz94su0ITMV2VhMZTggWGdyb3FY0BFSzgoGROQ_KEY = os.environ.get("GROQ_KEY", "")U2W6TU5Azf4JY6l8m"  # paste your full key hereDB_PATH = "screening.db"
+GROQ_KEY = os.environ.get("GROQ_KEY", "")
 DB_PATH = "screening.db"
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1459,6 +1462,7 @@ CANDIDATE_DASHBOARD_HTML = """<!DOCTYPE html>
     <a class="nav-item active" href="/dashboard"><span class="icon">🏠</span> Dashboard</a>
     <a class="nav-item" href="/resume-builder"><span class="icon">📄</span> Resume Builder</a>
     <a class="nav-item" href="/jobs"><span class="icon">💼</span> Browse Jobs</a>
+    <a class="nav-item {% if request.path == '/job-finder' %}active{% endif %}" href="/job-finder"><span class="icon">🔍</span> Job Finder</a>
     <a class="nav-item" href="/analytics"><span class="icon">📊</span> Analytics</a>
   </div>
   <div class="sidebar-bottom">
@@ -4411,5 +4415,128 @@ Resume text:
     except Exception as e:
         return jsonify({'error': f'AI parse failed: {str(e)}'}), 500
 
+# ── ADD THESE ROUTES TO app.py (just above if __name__ == '__main__':) ──
+
+@app.route('/job-finder')
+def job_finder():
+    return render_template('jobseeker/job-finder.html')
+
+
+@app.route('/api/job-finder/search', methods=['POST'])
+def job_finder_search():
+    data = request.get_json()
+    query = data.get('query', '').strip()
+    location = data.get('location', 'india').strip() or 'india'
+    page = data.get('page', 1)
+
+    if not query:
+        return jsonify({'error': 'Please enter a job title or skills'}), 400
+
+    ADZUNA_APP_ID = '834eb1b0'
+    ADZUNA_APP_KEY = 'fa213ae469a9a0b8ae761ee4f7bdab1a'
+
+    try:
+        url = "https://jsearch.p.rapidapi.com/search"
+        headers = {
+            "x-rapidapi-host": "jsearch.p.rapidapi.com",
+            "x-rapidapi-key": "c4a2d052f4mshb96cf15200ecc90p14f4dejsne487aadda036"
+        }
+        params = {
+            "query": f"{query} in {location}",
+            "page": str(page),
+            "num_results": "20",
+            "date_posted": "all"
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        resp.raise_for_status()
+        results = resp.json()
+
+        jobs = []
+        for job in results.get('data', []):
+            title = job.get('job_title', '')
+            company = job.get('employer_name', 'Unknown')
+            location_name = ', '.join(filter(None, [job.get('job_city') or '', job.get('job_state') or '', job.get('job_country') or '']))
+            description = job.get('job_description', '')
+            redirect_url = job.get('job_apply_link', '')
+            salary_min = job.get('job_min_salary')
+            salary_max = job.get('job_max_salary')
+
+            query_words = query.lower().split()
+            match_count = sum(1 for w in query_words if w in title.lower() or w in description.lower())
+            fit_score = min(95, 60 + (match_count / max(len(query_words), 1)) * 35)
+            fit_score = round(fit_score)
+
+            salary_str = ''
+            if salary_min and salary_max:
+                salary_str = f'₹{int(salary_min):,} – ₹{int(salary_max):,}'
+
+            jobs.append({
+                'title': title,
+                'company': company,
+                'location': location_name,
+                'salary': salary_str,
+                'description': description[:200] + '...' if len(description) > 200 else description,
+                'url': redirect_url,
+                'fit_score': fit_score
+            })
+
+        jobs.sort(key=lambda x: x['fit_score'], reverse=True)
+        return jsonify({'success': True, 'jobs': jobs, 'total': len(jobs), 'query': query})
+
+    except Exception as e:
+        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+
+
+@app.route('/api/job-finder/extract-skills', methods=['POST'])
+def extract_skills_from_resume():
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['resume']
+    ext = file.filename.rsplit('.', 1)[-1].lower()
+    if ext not in {'pdf', 'docx', 'doc'}:
+        return jsonify({'error': 'Only PDF or DOCX allowed'}), 400
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.' + ext) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        raw_text = extract_text_from_file(tmp_path, file.filename)
+    finally:
+        os.unlink(tmp_path)
+
+    if not raw_text.strip():
+        return jsonify({'error': 'Could not extract text. Use DOCX for best results.'}), 400
+
+    prompt = f"""
+From this resume text, extract:
+1. The best job title/role this person should search for
+2. Top 5 skills
+
+Return ONLY JSON like this (no markdown, no explanation):
+{{"role": "Python Developer", "skills": ["Python", "Flask", "SQL", "Machine Learning", "Django"], "location": "India"}}
+
+Resume:
+{raw_text[:3000]}
+"""
+    try:
+        raw = gemini(prompt)
+        if not raw or not raw.strip():
+            return jsonify({'error': 'AI returned empty response. Check your GROQ key.'}), 500
+        if raw.startswith('AI error:'):
+            return jsonify({'error': raw}), 500
+        raw = re.sub(r'^```[a-z]*\n?', '', raw.strip())
+        raw = re.sub(r'\n?```$', '', raw)
+        # extract just the JSON object
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not match:
+            return jsonify({'error': f'No JSON found in AI response: {raw[:200]}'}), 500
+        parsed = json.loads(match.group())
+        return jsonify({'success': True, 'data': parsed})
+    except Exception as e:
+        return jsonify({'error': f'AI extraction failed: {str(e)}'}), 500
+      
 if __name__ == '__main__':
     app.run(debug=True, port=5001, use_reloader=False)

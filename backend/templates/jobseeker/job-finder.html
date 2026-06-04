@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Finder – RecruitAI</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0e14;
+  --panel: #13141d;
+  --card: #1a1b26;
+  --border: #2a2b3a;
+  --accent: #7c6fff;
+  --accent2: #ff6b6b;
+  --accent3: #34d399;
+  --text: #e8e9f0;
+  --muted: #6b6c7e;
+  --high: #34d399;
+  --mid: #fbbf24;
+  --low: #f87171;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* NAV */
+.nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 28px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.nav-brand { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--accent); }
+.nav-links { display: flex; gap: 6px; }
+.nav-item { padding: 7px 14px; border-radius: 8px; color: var(--muted); font-size: 13px; text-decoration: none; transition: all .2s; cursor: pointer; }
+.nav-item:hover, .nav-item.active { background: rgba(124,111,255,.15); color: var(--accent); }
+
+/* LAYOUT */
+.page { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+/* HERO */
+.hero { text-align: center; margin-bottom: 40px; }
+.hero h1 { font-family: 'Syne', sans-serif; font-size: 42px; font-weight: 800; background: linear-gradient(135deg, var(--accent), #a78bfa, var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
+.hero p { color: var(--muted); font-size: 16px; }
+
+/* SEARCH BOX */
+.search-box { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 28px; margin-bottom: 32px; }
+.search-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+.stab { padding: 8px 18px; border-radius: 10px; border: 1px solid var(--border); background: none; color: var(--muted); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .2s; }
+.stab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.search-manual { display: flex; gap: 12px; flex-wrap: wrap; }
+.search-manual input { flex: 1; min-width: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; transition: border .2s; }
+.search-manual input:focus { border-color: var(--accent); }
+.search-manual input::placeholder { color: var(--muted); }
+.btn-search { padding: 12px 28px; background: var(--accent); border: none; border-radius: 12px; color: #fff; font-size: 14px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .2s; white-space: nowrap; }
+.btn-search:hover { background: #6a5fff; transform: translateY(-1px); }
+
+.search-resume { display: none; }
+.search-resume.show { display: block; }
+.upload-zone { border: 2px dashed var(--border); border-radius: 14px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(124,111,255,.05); }
+.upload-zone .icon { font-size: 32px; margin-bottom: 10px; }
+.upload-zone p { color: var(--muted); font-size: 14px; }
+.upload-zone strong { color: var(--accent); }
+#resumeInput { display: none; }
+.extracted-query { margin-top: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: none; }
+.extracted-query.show { display: block; }
+.eq-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.eq-role { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
+.skill-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.skill-tag { padding: 4px 10px; background: rgba(124,111,255,.15); border: 1px solid rgba(124,111,255,.3); border-radius: 6px; font-size: 12px; color: var(--accent); }
+.btn-search-resume { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 12px; color: #fff; font-size: 14px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; margin-top: 8px; }
+
+/* STATS BAR */
+.stats-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
+.stats-bar .count { font-family: 'Syne', sans-serif; font-size: 15px; color: var(--muted); }
+.stats-bar .count span { color: var(--text); font-weight: 700; }
+.filter-btns { display: flex; gap: 6px; margin-left: auto; }
+.fbtn { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--muted); font-size: 12px; cursor: pointer; transition: all .2s; font-family: 'DM Sans', sans-serif; }
+.fbtn.active { border-color: var(--accent); color: var(--accent); background: rgba(124,111,255,.1); }
+
+/* JOB GRID */
+.jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+
+/* JOB CARD */
+.job-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: all .25s; cursor: pointer; position: relative; overflow: hidden; }
+.job-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), #a78bfa); opacity: 0; transition: opacity .2s; }
+.job-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,111,255,.15); }
+.job-card:hover::before { opacity: 1; }
+
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.company-info { flex: 1; }
+.company-avatar { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #a78bfa); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: #fff; margin-bottom: 8px; }
+.job-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; line-height: 1.3; }
+.company-name { font-size: 13px; color: var(--muted); }
+
+.fit-badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; font-family: 'Syne', sans-serif; flex-shrink: 0; }
+.fit-high { background: rgba(52,211,153,.15); color: var(--high); border: 1px solid rgba(52,211,153,.3); }
+.fit-mid { background: rgba(251,191,36,.15); color: var(--mid); border: 1px solid rgba(251,191,36,.3); }
+.fit-low { background: rgba(248,113,113,.15); color: var(--low); border: 1px solid rgba(248,113,113,.3); }
+
+.card-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.meta-chip { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 6px; }
+
+.job-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+.card-footer { display: flex; justify-content: space-between; align-items: center; }
+.job-date { font-size: 11px; color: var(--muted); }
+.btn-apply { padding: 8px 18px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; text-decoration: none; transition: all .2s; }
+.btn-apply:hover { background: #6a5fff; }
+
+/* PRIORITY SECTIONS */
+.priority-section { margin-bottom: 32px; }
+.priority-label { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; }
+.priority-dot { width: 10px; height: 10px; border-radius: 50%; }
+.dot-high { background: var(--high); box-shadow: 0 0 8px var(--high); }
+.dot-mid { background: var(--mid); box-shadow: 0 0 8px var(--mid); }
+.dot-low { background: var(--low); box-shadow: 0 0 8px var(--low); }
+
+/* STATES */
+.empty-state { text-align: center; padding: 80px 20px; }
+.empty-state .big-icon { font-size: 56px; margin-bottom: 16px; }
+.empty-state h3 { font-family: 'Syne', sans-serif; font-size: 20px; margin-bottom: 8px; }
+.empty-state p { color: var(--muted); font-size: 14px; }
+
+.loading { text-align: center; padding: 60px; }
+.spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading p { color: var(--muted); font-size: 14px; }
+
+.error-msg { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); border-radius: 12px; padding: 16px; color: #f87171; font-size: 14px; margin-bottom: 20px; display: none; }
+.error-msg.show { display: block; }
+
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-size: 14px; z-index: 9999; transform: translateY(80px); opacity: 0; transition: all .3s; }
+.toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">✦ RecruitAI</div>
+  <div class="nav-links">
+    <a class="nav-item" href="/dashboard">🏠 Home</a>
+    <a class="nav-item" href="/resume-builder">📄 Resume Builder</a>
+    <a class="nav-item active" href="/job-finder">🔍 Job Finder</a>
+    <a class="nav-item" href="/job-board">💼 Job Board</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <div class="hero">
+    <h1>🔍 AI Job Finder</h1>
+    <p>Search real jobs from across the web — or upload your resume and let AI find the best matches</p>
+  </div>
+
+  <!-- SEARCH BOX -->
+  <div class="search-box">
+    <div class="search-tabs">
+      <button class="stab active" onclick="switchTab('manual')">✏️ Search by Role / Skills</button>
+      <button class="stab" onclick="switchTab('resume')">📄 Upload Resume</button>
+    </div>
+
+    <!-- Manual Search -->
+    <div id="manualSearch">
+      <div class="search-manual">
+        <input type="text" id="queryInput" placeholder="e.g. Python Developer, Data Analyst, Frontend Engineer" onkeydown="if(event.key==='Enter') searchJobs()" />
+        <input type="text" id="locationInput" placeholder="Location (e.g. Mumbai, Bangalore)" />
+        <button class="btn-search" onclick="searchJobs()">🔍 Find Jobs</button>
+      </div>
+    </div>
+
+    <!-- Resume Upload -->
+    <div id="resumeSearch" class="search-resume">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('resumeInput').click()" ondragover="handleDrag(event)" ondrop="handleDrop(event)">
+        <div class="icon">📄</div>
+        <p><strong>Click or drag & drop</strong> your resume</p>
+        <p style="margin-top:4px;font-size:12px;">DOCX recommended · PDF (text-based) also works</p>
+      </div>
+      <input type="file" id="resumeInput" accept=".pdf,.docx,.doc" onchange="handleResumeUpload(this.files[0])">
+
+      <div class="extracted-query" id="extractedQuery">
+        <div class="eq-label">AI extracted from your resume:</div>
+        <div class="eq-role" id="eqRole"></div>
+        <div class="skill-tags" id="eqSkills"></div>
+        <input type="text" id="eqLocation" placeholder="Location (e.g. Mumbai, Bangalore)" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:8px;" />
+        <button class="btn-search-resume" onclick="searchFromResume()">🚀 Find Matching Jobs</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- RESULTS -->
+  <div id="resultsArea">
+    <div class="empty-state">
+      <div class="big-icon">🎯</div>
+      <h3>Find your perfect job</h3>
+      <p>Search by role/skills or upload your resume to get AI-matched job listings</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentJobs = [];
+let currentFilter = 'all';
+
+function switchTab(tab) {
+  document.querySelectorAll('.stab').forEach((b,i) => b.classList.toggle('active', (tab==='manual'&&i===0)||(tab==='resume'&&i===1)));
+  document.getElementById('manualSearch').style.display = tab === 'manual' ? '' : 'none';
+  document.getElementById('resumeSearch').classList.toggle('show', tab === 'resume');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function showError(msg) {
+  const e = document.getElementById('errorMsg');
+  e.textContent = msg;
+  e.classList.add('show');
+}
+
+function hideError() {
+  document.getElementById('errorMsg').classList.remove('show');
+}
+
+async function searchJobs(query, location) {
+  const q = query || document.getElementById('queryInput').value.trim();
+  const loc = location || document.getElementById('locationInput').value.trim() || 'India';
+
+  if (!q) { showError('Please enter a job title or skills'); return; }
+  hideError();
+
+  document.getElementById('resultsArea').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Searching jobs across the web...</p>
+    </div>`;
+
+  try {
+    const res = await fetch('/api/job-finder/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, location: loc })
+    });
+    const data = await res.json();
+
+    if (!data.success) { showError(data.error || 'Search failed'); document.getElementById('resultsArea').innerHTML = ''; return; }
+
+    currentJobs = data.jobs;
+    renderJobs(data.jobs, data.total, q);
+  } catch(e) {
+    showError('Network error — make sure Flask is running');
+    document.getElementById('resultsArea').innerHTML = '';
+  }
+}
+
+function renderJobs(jobs, total, query) {
+  if (!jobs.length) {
+    document.getElementById('resultsArea').innerHTML = `
+      <div class="empty-state">
+        <div class="big-icon">😔</div>
+        <h3>No jobs found</h3>
+        <p>Try different keywords or a broader location</p>
+      </div>`;
+    return;
+  }
+
+  const high = jobs.filter(j => j.fit_score >= 80);
+  const mid = jobs.filter(j => j.fit_score >= 60 && j.fit_score < 80);
+  const low = jobs.filter(j => j.fit_score < 60);
+
+  let html = `
+    <div class="stats-bar">
+      <div class="count">Found <span>${total.toLocaleString()}</span> jobs for "<span>${query}</span>" — showing top <span>${jobs.length}</span></div>
+      <div class="filter-btns">
+        <button class="fbtn active" onclick="filterJobs('all',this)">All (${jobs.length})</button>
+        <button class="fbtn" onclick="filterJobs('high',this)" style="color:var(--high)">🟢 High fit (${high.length})</button>
+        <button class="fbtn" onclick="filterJobs('mid',this)" style="color:var(--mid)">🟡 Medium (${mid.length})</button>
+        <button class="fbtn" onclick="filterJobs('low',this)" style="color:var(--low)">🔴 Stretch (${low.length})</button>
+      </div>
+    </div>
+    <div id="jobsContainer">`;
+
+  if (high.length) {
+    html += `<div class="priority-section">
+      <div class="priority-label"><div class="priority-dot dot-high"></div> High Probability — Strong Match</div>
+      <div class="jobs-grid">${high.map(jobCard).join('')}</div>
+    </div>`;
+  }
+  if (mid.length) {
+    html += `<div class="priority-section">
+      <div class="priority-label"><div class="priority-dot dot-mid"></div> Medium Probability — Good Fit</div>
+      <div class="jobs-grid">${mid.map(jobCard).join('')}</div>
+    </div>`;
+  }
+  if (low.length) {
+    html += `<div class="priority-section">
+      <div class="priority-label"><div class="priority-dot dot-low"></div> Stretch Roles — Apply Anyway</div>
+      <div class="jobs-grid">${low.map(jobCard).join('')}</div>
+    </div>`;
+  }
+
+  html += `</div>`;
+  document.getElementById('resultsArea').innerHTML = html;
+}
+
+function jobCard(job) {
+  const fitClass = job.fit_score >= 80 ? 'fit-high' : job.fit_score >= 60 ? 'fit-mid' : 'fit-low';
+  const initial = job.company ? job.company[0].toUpperCase() : '?';
+  const colors = ['#7c6fff','#ff6b6b','#34d399','#fbbf24','#60a5fa','#f472b6'];
+  const color = colors[job.company.charCodeAt(0) % colors.length];
+
+  return `
+    <div class="job-card">
+      <div class="card-top">
+        <div class="company-info">
+          <div class="company-avatar" style="background:linear-gradient(135deg,${color},${color}99)">${initial}</div>
+          <div class="job-title">${job.title}</div>
+          <div class="company-name">${job.company}</div>
+        </div>
+        <div class="fit-badge ${fitClass}">${job.fit_score}% fit</div>
+      </div>
+      <div class="card-meta">
+        ${job.location ? `<div class="meta-chip">📍 ${job.location}</div>` : ''}
+        ${job.salary ? `<div class="meta-chip">💰 ${job.salary}</div>` : ''}
+        ${job.category ? `<div class="meta-chip">🏷 ${job.category}</div>` : ''}
+      </div>
+      <div class="job-desc">${job.description}</div>
+      <div class="card-footer">
+        <div class="job-date">${job.created ? '📅 ' + job.created : ''}</div>
+        <a href="${job.url}" target="_blank" class="btn-apply">Apply Now →</a>
+      </div>
+    </div>`;
+}
+
+function filterJobs(type, btn) {
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = type;
+
+  const filtered = type === 'all' ? currentJobs :
+    type === 'high' ? currentJobs.filter(j => j.fit_score >= 80) :
+    type === 'mid' ? currentJobs.filter(j => j.fit_score >= 60 && j.fit_score < 80) :
+    currentJobs.filter(j => j.fit_score < 60);
+
+  const container = document.getElementById('jobsContainer');
+  if (container) container.innerHTML = `<div class="jobs-grid">${filtered.map(jobCard).join('')}</div>`;
+}
+
+// Resume upload
+function handleDrag(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleResumeUpload(file);
+}
+
+async function handleResumeUpload(file) {
+  if (!file) return;
+  document.getElementById('uploadZone').innerHTML = `<div class="icon">⏳</div><p>Extracting skills with AI...</p>`;
+
+  const fd = new FormData();
+  fd.append('resume', file);
+
+  try {
+    const res = await fetch('/api/job-finder/extract-skills', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (!data.success) { showError(data.error); return; }
+
+    const d = data.data;
+    document.getElementById('uploadZone').innerHTML = `<div class="icon">✅</div><p>Resume analysed successfully!</p>`;
+    document.getElementById('eqRole').textContent = d.role || '';
+    document.getElementById('eqSkills').innerHTML = (d.skills || []).map(s => `<span class="skill-tag">${s}</span>`).join('');
+    document.getElementById('eqLocation').value = d.location || 'India';
+    document.getElementById('extractedQuery').classList.add('show');
+    showToast('✅ Skills extracted! Click Find Matching Jobs');
+  } catch(e) {
+    showError('Failed to extract skills. Try DOCX format.');
+  }
+}
+
+function searchFromResume() {
+  const role = document.getElementById('eqRole').textContent;
+  const skills = Array.from(document.querySelectorAll('#eqSkills .skill-tag')).map(s => s.textContent);
+  const location = document.getElementById('eqLocation').value || 'India';
+  const query = role + ' ' + skills.slice(0, 3).join(' ');
+  searchJobs(query, location);
+}
+</script>
+</body>
+</html>
