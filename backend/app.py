@@ -1,4 +1,7 @@
 import os
+import re 
+import fitz
+import docx as docxlib
 import json
 import sqlite3
 import requests
@@ -8,7 +11,7 @@ from io import BytesIO
 # ── top of file ──────────────────────────────
 import os
 import uuid
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 from PIL import Image
@@ -20,38 +23,25 @@ UPLOAD_FOLDER   = 'static/uploads/profile_photos'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 MAX_FILE_SIZE   = 2 * 1024 * 1024
 MAX_DIMENSION   = (400, 400)
+
 app.config['UPLOAD_FOLDER']       = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH']  = MAX_FILE_SIZE
 
-# ── helpers (before routes) ──────────────────
-def allowed_file(filename): ...
-def resize_image(path): ...
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def resize_image(image_path, max_size=MAX_DIMENSION):
+    with Image.open(image_path) as img:
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.thumbnail(max_size, Image.LANCZOS)
+        img.save(image_path, optimize=True, quality=85)
+
 def delete_old_photo(old_path):
-    """Delete previously uploaded photo to avoid clutter."""
     if old_path:
         local_path = old_path.lstrip('/')
         if os.path.exists(local_path):
             os.remove(local_path)
-
-# ── your existing routes ──────────────────────
-@app.route('/')
-def index(): ...
-
-@app.route('/resume-builder')
-def resume_builder(): ...
-
-# ── new upload route ──────────────────────────
-@app.route('/upload-photo', methods=['POST'])
-def upload_photo(): ...
-
-# ── error handler ─────────────────────────────
-@app.errorhandler(RequestEntityTooLarge)
-def file_too_large(e): ...
-
-# ── entry point ───────────────────────────────
-if __name__ == '__main__':
-    app.run(debug=True)
-    
     
 from flask import (
     Flask,
@@ -75,9 +65,8 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 app.jinja_env.filters['fromjson'] = lambda s: json.loads(s) if s else {}
 
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+GROQ_KEY = "gsk_Xpz94su0ITMV2VhMZTggWGdyb3FY0BFSzgoGROQ_KEY = os.environ.get("GROQ_KEY", "")U2W6TU5Azf4JY6l8m"  # paste your full key hereDB_PATH = "screening.db"
 DB_PATH = "screening.db"
-
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -191,22 +180,24 @@ def push_notification(user, msg_type, message, link="/"):
 
 
 def gemini(prompt):
-    if not GEMINI_KEY:
-        return "AI unavailable (no GEMINI_KEY set)"
+    if not GROQ_KEY:
+        return "AI unavailable (no GROQ_KEY set)"
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_KEY}"
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        r = requests.post(url, json=payload, timeout=30)
-        data = r.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        from groq import Groq
+        client = Groq(api_key=GROQ_KEY)
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
+        )
+        return chat_completion.choices[0].message.content
     except Exception as e:
         return f"AI error: {str(e)}"
-
-@app.route("/")
+    
+@app.route('/')
 def index():
-    if "user" not in session:
-        return redirect("/login")
-    return redirect("/recruiter/dashboard" if session.get("role") == "recruiter" else "/dashboard")
+    if 'user' not in session:
+        return render_template('public/landing_page_1.html')  # show landing page
+    return redirect(url_for('candidate_dashboard'))  # logged in → go to dashboard
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -299,7 +290,44 @@ def resume_builder():
     if session.get("role") == "recruiter": return redirect("/recruiter/dashboard")
     return render_template("jobseeker/resume-builder.html")
 
-# RECRUITER DASHBOARD
+@app.route('/upload-photo', methods=['POST'])
+def upload_photo():
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['photo']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type. Use JPG, PNG, or WEBP'}), 400
+
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_filename = f"{uuid.uuid4().hex}.{ext}"
+
+    os.makedirs('static/uploads/profile_photos', exist_ok=True)
+    save_path = os.path.join('static/uploads/profile_photos', unique_filename)
+
+    old_photo = request.form.get('old_photo', '')
+    delete_old_photo(old_photo)
+
+    file.save(save_path)
+
+    try:
+        resize_image(save_path)
+    except Exception as e:
+        os.remove(save_path)
+        return jsonify({'error': f'Image processing failed: {str(e)}'}), 500
+
+    photo_url = f'/static/uploads/profile_photos/{unique_filename}'
+    return jsonify({'success': True, 'path': photo_url})
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def file_too_large(e):
+    return jsonify({'error': 'File too large. Max size is 2 MB'}), 413
+
 @app.route("/recruiter/dashboard")
 def recruiter_dashboard():
     if "user" not in session: return redirect("/login")
@@ -4267,5 +4295,121 @@ async function getRoadmap(){
 
 init_tables()
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# ── HELPER: extract raw text from uploaded file ──
+def extract_text_from_file(filepath, filename):
+    ext = filename.rsplit('.', 1)[-1].lower()
+    print(f"=== EXTRACTING: {filename}, ext={ext}, path={filepath} ===")
+    if ext == 'pdf':
+        doc = fitz.open(filepath)
+        print(f"=== PDF PAGES: {len(doc)} ===")
+        text = "\n".join(page.get_text() for page in doc)
+        print(f"=== TEXT LENGTH: {len(text)} ===")
+        print(f"=== TEXT PREVIEW: {repr(text[:300])} ===")
+        if not text.strip():
+            text = ""
+            for page in doc:
+                blocks = page.get_text("blocks")
+                for block in blocks:
+                    if block[6] == 0:
+                        text += block[4] + "\n"
+        if not text.strip():
+            try:
+                from pdfminer.high_level import extract_text
+                text = extract_text(filepath)
+            except:
+                pass
+        return text.strip()
+    elif ext in ('docx', 'doc'):
+        d = docxlib.Document(filepath)
+        parts = []
+        for p in d.paragraphs:
+            if p.text.strip():
+                parts.append(p.text)
+        for table in d.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell.text.strip():
+                        parts.append(cell.text)
+        return "\n".join(parts)
+    return ""
+# ── ROUTE: parse uploaded resume ──
+@app.route('/api/resume-builder/parse', methods=['POST'])
+@app.route('/api/resume-builder/parse', methods=['POST'])
+def parse_resume():
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['resume']
+    if not file.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+
+    allowed = {'pdf', 'docx', 'doc'}
+    ext = file.filename.rsplit('.', 1)[-1].lower()
+    if ext not in allowed:
+        return jsonify({'error': 'Only PDF or DOCX allowed'}), 400
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.' + ext) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        raw_text = extract_text_from_file(tmp_path, file.filename)
+    finally:
+        os.unlink(tmp_path)
+
+    if not raw_text.strip():
+        return jsonify({'error': 'Could not extract text. Please use a DOCX file or a text-based PDF (not scanned/image).'}), 400
+
+    prompt = f"""
+You are a resume parser. Extract all information from the resume text below and return ONLY valid JSON — no markdown, no explanation, just the raw JSON object.
+
+Return this exact structure:
+{{
+  "name": "",
+  "title": "",
+  "email": "",
+  "phone": "",
+  "location": "",
+  "linkedin": "",
+  "github": "",
+  "website": "",
+  "summary": "",
+  "exp": [
+    {{"title": "", "company": "", "start": "", "end": "", "desc": ""}}
+  ],
+  "edu": [
+    {{"degree": "", "institution": "", "start": "", "end": "", "desc": ""}}
+  ],
+  "cert": [
+    {{"title": "", "issuer": "", "date": "", "id": ""}}
+  ],
+  "skill": [
+    {{"name": "", "level": ""}}
+  ],
+  "lang": [
+    {{"name": "", "level": ""}}
+  ],
+  "proj": [
+    {{"title": "", "tech": "", "desc": ""}}
+  ],
+  "extra": [
+    {{"title": "", "org": "", "type": "✨ Other", "year": "", "desc": ""}}
+  ]
+}}
+
+Resume text:
+{raw_text[:6000]}
+"""
+
+    try:
+        raw = gemini(prompt)
+        raw = re.sub(r'^```[a-z]*\n?', '', raw.strip())
+        raw = re.sub(r'\n?```$', '', raw)
+        parsed = json.loads(raw)
+        return jsonify({'success': True, 'data': parsed})
+    except Exception as e:
+        return jsonify({'error': f'AI parse failed: {str(e)}'}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5001, use_reloader=False)

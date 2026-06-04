@@ -1,4 +1,20 @@
-.env
+# Python
 __pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Database
 *.db
-uploads/
+*.sqlite3
+
+# Uploads
+backend/static/uploads/
+backend/uploads/
+# Flask session
+flask_session/
+
+# OS
+.DS_Store
+Thumbs.db
