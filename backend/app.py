@@ -900,10 +900,23 @@ def load_resume_draft():
 def download_resume_pdf():
     if "user" not in session: return jsonify({"error": "Not logged in"}), 401
     data = request.get_json()
+    if 'edu' in data and 'education' not in data:
+        data['education'] = [{'degree': e.get('degree',''), 'college': e.get('institution', e.get('college','')), 'from': e.get('start',''), 'to': e.get('end','')} for e in data['edu']]
+    if 'exp' in data and 'experiences' not in data:
+        data['experiences'] = data['exp']
+    if 'skill' in data and 'skills' not in data:
+        data['skills'] = [s.get('name','') if isinstance(s, dict) else s for s in data['skill']]
+    if 'proj' in data and 'projects' not in data:
+        data['projects'] = [{'name': p.get('title', p.get('name','')), 'tech': p.get('tech',''), 'desc': p.get('desc','')} for p in data['proj']]
+    if 'lang' in data and 'languages' not in data:
+        data['languages'] = [l.get('name','') if isinstance(l, dict) else l for l in data['lang']]
+    if 'cert' in data and 'certifications' not in data:
+        data['certifications'] = [c.get('title','') if isinstance(c, dict) else c for c in data['cert']]
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     y = height - 50
+    margin_l, margin_r = 50, width - 50
 
     def nl(amount=15):
         nonlocal y
@@ -912,113 +925,131 @@ def download_resume_pdf():
             p.showPage()
             y = height - 50
 
-    p.setFont("Helvetica-Bold", 24)
-    p.drawString(50, y, data.get("name", "Your Name"))
-    nl(25)
-    p.setFont("Helvetica", 14)
-    p.drawString(50, y, data.get("headline", ""))
-    nl(22)
-    p.setFont("Helvetica", 11)
-    p.drawString(50, y, f"{data.get('email','')}  |  {data.get('phone','')}  |  {data.get('location','')}")
-    nl(20)
-    p.setStrokeColorRGB(0.48, 0.36, 0.96)
-    p.setLineWidth(1.5)
-    p.line(50, y, width-50, y)
-    nl(18)
+    def draw_wrapped(text, x, max_width, font="Helvetica", size=11, line_height=14):
+        p.setFont(font, size)
+        words = str(text).split()
+        line = ""
+        for word in words:
+            test = line + (" " if line else "") + word
+            if p.stringWidth(test, font, size) <= max_width:
+                line = test
+            else:
+                p.drawString(x, y, line)
+                nl(line_height)
+                line = word
+        if line:
+            p.drawString(x, y, line)
+            nl(line_height)
 
     def section_header(title):
-        nonlocal y
-        p.setFont("Helvetica-Bold", 13)
+        nl(6)
+        p.setFont("Helvetica-Bold", 11)
         p.setFillColorRGB(0.49, 0.36, 0.96)
-        p.drawString(50, y, title)
+        p.drawString(margin_l, y, title.upper())
+        p.setFillColorRGB(0, 0, 0)
+        nl(4)
+        p.setStrokeColorRGB(0.49, 0.36, 0.96)
+        p.setLineWidth(0.5)
+        p.line(margin_l, y, margin_r, y)
+        nl(12)
+
+    # Header
+    p.setFont("Helvetica-Bold", 22)
+    p.drawString(margin_l, y, data.get("name", "Your Name"))
+    nl(22)
+    if data.get("headline"):
+        p.setFont("Helvetica", 13)
+        p.setFillColorRGB(0.3, 0.3, 0.3)
+        p.drawString(margin_l, y, data["headline"])
         p.setFillColorRGB(0, 0, 0)
         nl(16)
+    contact = "  |  ".join(filter(None, [data.get("email",""), data.get("phone",""), data.get("location","")]))
+    if contact:
+        p.setFont("Helvetica", 10)
+        p.setFillColorRGB(0.4, 0.4, 0.4)
+        p.drawString(margin_l, y, contact)
+        p.setFillColorRGB(0, 0, 0)
+        nl(14)
+    p.setStrokeColorRGB(0.48, 0.36, 0.96)
+    p.setLineWidth(1.5)
+    p.line(margin_l, y, margin_r, y)
+    nl(14)
 
     if data.get("summary"):
-        section_header("SUMMARY")
-        p.setFont("Helvetica", 11)
-        for line in data["summary"].split("\n"):
-            p.drawString(50, y, line); nl()
-        nl(8)
-
-    if data.get("experiences"):
-        section_header("EXPERIENCE")
-        for exp in data["experiences"]:
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, exp.get("title", "")); nl(14)
-            p.setFont("Helvetica", 11)
-            p.drawString(50, y, f"{exp.get('company','')}  |  {exp.get('start','')} – {exp.get('end','Present')}"); nl(13)
-            for line in exp.get("desc","").split("\n"):
-                p.drawString(60, y, line); nl()
-            nl(8)
-
-    if data.get("education"):
-        section_header("EDUCATION")
-        for edu in data["education"]:
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, edu.get("degree","")); nl(14)
-            p.setFont("Helvetica", 11)
-            p.drawString(50, y, f"{edu.get('college','')}  |  {edu.get('from','')} – {edu.get('to','')}"); nl(20)
-
-    if data.get("projects"):
-        section_header("PROJECTS")
-        for proj in data["projects"]:
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, proj.get("name", proj.get("title",""))); nl(14)
-            if proj.get("tech"):
-                p.setFont("Helvetica-Oblique", 10)
-                p.drawString(50, y, proj["tech"]); nl(13)
-            p.setFont("Helvetica", 11)
-            for line in proj.get("desc","").split("\n"):
-                p.drawString(60, y, line); nl()
-            nl(8)
+        section_header("Summary")
+        draw_wrapped(data["summary"], margin_l, margin_r - margin_l, size=10, line_height=13)
+        nl(4)
 
     if data.get("skills"):
-        section_header("SKILLS")
-        p.setFont("Helvetica", 11)
-        p.drawString(50, y, ", ".join(data["skills"])); nl(20)
+        section_header("Skills")
+        p.setFont("Helvetica", 10)
+        skills_line = "  •  ".join(data["skills"])
+        draw_wrapped(skills_line, margin_l, margin_r - margin_l, size=10, line_height=13)
+        nl(4)
 
-    if data.get("languages"):
-        section_header("LANGUAGES")
-        p.setFont("Helvetica", 11)
-        p.drawString(50, y, ", ".join(data["languages"])); nl(20)
-
-    if data.get("certifications"):
-        section_header("CERTIFICATIONS")
-        p.setFont("Helvetica", 11)
-        for cert in data["certifications"]:
-            p.drawString(50, y, f"• {cert}"); nl()
-
-    if data.get("extraCurricular"):
-        section_header("EXTRA CURRICULAR")
-        for ec in data["extraCurricular"]:
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, f"{ec.get('title','')}  [{ec.get('type','')}]"); nl(14)
-            p.setFont("Helvetica", 11)
-            p.drawString(50, y, f"{ec.get('org','')}  {ec.get('year','')}"); nl(13)
-            if ec.get("desc"):
-                for line in ec["desc"].split("\n"):
-                    p.drawString(60, y, line); nl()
+    if data.get("experiences"):
+        section_header("Experience")
+        for exp in data["experiences"]:
+            p.setFont("Helvetica-Bold", 11)
+            p.drawString(margin_l, y, exp.get("title", ""))
+            nl(13)
+            p.setFont("Helvetica", 10)
+            p.setFillColorRGB(0.4, 0.4, 0.4)
+            sub = f"{exp.get('company','')}  |  {exp.get('start','')} – {exp.get('end','Present')}"
+            p.drawString(margin_l, y, sub)
+            p.setFillColorRGB(0, 0, 0)
+            nl(12)
+            if exp.get("desc"):
+                draw_wrapped(exp["desc"], margin_l + 8, margin_r - margin_l - 8, size=10, line_height=13)
             nl(6)
 
-    links = []
-    if data.get("github"):    links.append(f"GitHub: {data['github']}")
-    if data.get("linkedin"):  links.append(f"LinkedIn: {data['linkedin']}")
-    if data.get("portfolio"): links.append(f"Portfolio: {data['portfolio']}")
-    if data.get("twitter"):   links.append(f"Twitter: {data['twitter']}")
-    if links:
-        section_header("LINKS")
-        p.setFont("Helvetica", 11)
-        for link in links:
-            p.drawString(50, y, link); nl()
+    if data.get("education"):
+        section_header("Education")
+        for edu in data["education"]:
+            p.setFont("Helvetica-Bold", 11)
+            p.drawString(margin_l, y, edu.get("degree", ""))
+            nl(13)
+            p.setFont("Helvetica", 10)
+            p.setFillColorRGB(0.4, 0.4, 0.4)
+            sub = f"{edu.get('college','')}  |  {edu.get('from','')} – {edu.get('to','')}"
+            p.drawString(margin_l, y, sub.strip(" |– "))
+            p.setFillColorRGB(0, 0, 0)
+            nl(16)
+
+    if data.get("projects"):
+        section_header("Projects")
+        for proj in data["projects"]:
+            p.setFont("Helvetica-Bold", 11)
+            p.drawString(margin_l, y, proj.get("name", proj.get("title", "")))
+            nl(13)
+            if proj.get("tech"):
+                p.setFont("Helvetica-Oblique", 10)
+                p.setFillColorRGB(0.4, 0.4, 0.4)
+                p.drawString(margin_l, y, proj["tech"])
+                p.setFillColorRGB(0, 0, 0)
+                nl(12)
+            if proj.get("desc"):
+                draw_wrapped(proj["desc"], margin_l + 8, margin_r - margin_l - 8, size=10, line_height=13)
+            nl(6)
+
+    if data.get("certifications"):
+        section_header("Certifications")
+        for c in data["certifications"]:
+            p.setFont("Helvetica", 10)
+            p.drawString(margin_l, y, f"• {c}")
+            nl(13)
+
+    if data.get("languages"):
+        section_header("Languages")
+        p.setFont("Helvetica", 10)
+        p.drawString(margin_l, y, "  •  ".join(data["languages"]))
+        nl(13)
 
     p.save()
     buffer.seek(0)
-    
-    buffer.seek(0)
-    _track_download(session["user"])
-    return send_file(buffer, as_attachment=True, download_name="resume.pdf", mimetype="application/pdf")
-
+    name_slug = data.get("name", "resume").replace(" ", "_")
+    return send_file(buffer, as_attachment=True, download_name=f"{name_slug}_resume.pdf", mimetype="application/pdf")
+  
 def _track_download(username):
     try:
         conn = get_db()
@@ -4101,6 +4132,16 @@ textarea{resize:vertical;}
 <div class="editor">
   <div class="editor-title">✏️ Edit Resume</div>
 
+  <div class="e-card" style="border-color:rgba(99,102,241,0.2);">
+    <h3>⬆ Upload Existing Resume</h3>
+    <div id="uploadZone" style="border:2px dashed rgba(99,102,241,0.3);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;position:relative;" onclick="document.getElementById('resumeUploadInput').click()">
+      <div style="font-size:22px;">📄</div>
+      <div id="uploadLabel" style="font-size:12px;color:#6b7280;margin-top:4px;">Click to upload PDF or DOCX</div>
+      <input type="file" id="resumeUploadInput" accept=".pdf,.docx,.doc" style="display:none;" onchange="handleResumeUpload(this)">
+    </div>
+    <div id="uploadStatus" style="font-size:11px;margin-top:6px;color:#6b7280;"></div>
+  </div>
+
   <div class="e-card">
     <h3>Personal Info</h3>
     <label>Full Name</label><input type="text" id="name" placeholder="Rahul Sharma" oninput="renderResume()">
@@ -4245,8 +4286,65 @@ async function saveDraft(){
   try{const res=await fetch('/api/resume-builder/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const j=await res.json();showToast(j.success?'✅ Saved!':'❌ Save failed');}catch(e){showToast('❌ Save failed');}
 }
 
+async function handleResumeUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  document.getElementById('uploadLabel').textContent = file.name;
+  document.getElementById('uploadStatus').textContent = '⏳ Parsing resume with AI...';
+  const fd = new FormData();
+  fd.append('resume', file);
+  try {
+    const res = await fetch('/api/resume-builder/parse', {method:'POST', body:fd});
+    const d = await res.json();
+    if(!d.success){ document.getElementById('uploadStatus').textContent = '❌ ' + (d.error||'Parse failed'); return; }
+    const p = d.data;
+    // Personal info
+    if(p.name) document.getElementById('name').value = p.name;
+    if(p.title) document.getElementById('headline').value = p.title;
+    if(p.email) document.getElementById('email').value = p.email;
+    if(p.phone) document.getElementById('phone').value = p.phone;
+    if(p.location) document.getElementById('location').value = p.location;
+    if(p.summary) document.getElementById('summary').value = p.summary;
+    // Skills
+    if(p.skill && p.skill.length){
+      p.skill.forEach(s=>{ const name=typeof s==='string'?s:s.name; if(name && !resume.skills.includes(name)) resume.skills.push(name); });
+      renderSkillList();
+    }
+    // Experience
+    if(p.exp && p.exp.length){
+      resume.experiences = p.exp.map(e=>({title:e.title||'',company:e.company||'',start:e.start||'',end:e.end||'',desc:e.desc||''}));
+      renderExperienceList();
+    }
+    // Education — parser returns `institution`, form uses `college`
+    if(p.edu && p.edu.length){
+      resume.education = p.edu.map(e=>({degree:e.degree||'',college:e.institution||e.college||'',from:e.start||'',to:e.end||''}));
+      renderEducationList();
+    }
+    // Projects
+    if(p.proj && p.proj.length){
+      resume.projects = p.proj.map(pr=>({name:pr.title||pr.name||'',tech:pr.tech||'',desc:pr.desc||''}));
+      renderProjectList();
+    }
+    // Languages
+    if(p.lang && p.lang.length){
+      resume.languages = p.lang.map(l=>typeof l==='string'?l:l.name).filter(Boolean);
+      renderLanguageList();
+    }
+    // Certifications
+    if(p.cert && p.cert.length){
+      resume.certifications = p.cert.map(c=>typeof c==='string'?c:(c.title+(c.issuer?' — '+c.issuer:''))).filter(Boolean);
+      renderCertList();
+    }
+    renderResume();
+    document.getElementById('uploadStatus').textContent = '✅ Resume loaded! Review and edit below.';
+    showToast('✅ Resume parsed successfully!');
+  } catch(e){
+    document.getElementById('uploadStatus').textContent = '❌ Upload failed. Try again.';
+  }
+}
+
 async function downloadResume(){
-  const data={name:document.getElementById('name').value,headline:document.getElementById('headline').value,email:document.getElementById('email').value,phone:document.getElementById('phone').value,location:document.getElementById('location').value,summary:document.getElementById('summary').value,...resume};
+  const data={name:document.getElementById('name').value,headline:document.getElementById('headline').value,email:document.getElementById('email').value,phone:document.getElementById('phone').value,location:document.getElementById('location').value,summary:document.getElementById('summary').value,skills:(state.skill||[]).map(s=>typeof s==='string'?s:s.name),experiences:(state.exp||[]),education:(state.edu||[]).map(e=>({degree:e.degree||'',college:e.institution||e.college||'',from:e.start||'',to:e.end||'',desc:e.desc||''})),projects:(state.proj||[]).map(p=>({name:p.title||p.name||'',tech:p.tech||'',desc:p.desc||''})),languages:(state.lang||[]).map(l=>typeof l==='string'?l:l.name),certifications:(state.cert||[]).map(c=>typeof c==='string'?c:(c.title+(c.issuer?' — '+c.issuer:'')))};
   showToast('⏳ Generating PDF...');
   try{
     const response=await fetch('/api/resume-builder/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -4338,7 +4436,6 @@ def extract_text_from_file(filepath, filename):
     return ""
 # ── ROUTE: parse uploaded resume ──
 @app.route('/api/resume-builder/parse', methods=['POST'])
-@app.route('/api/resume-builder/parse', methods=['POST'])
 def parse_resume():
     if 'resume' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
@@ -4424,69 +4521,110 @@ def job_finder():
 
 @app.route('/api/job-finder/search', methods=['POST'])
 def job_finder_search():
+    if "user" not in session:
+        return jsonify({'error': 'Not logged in'}), 401
     data = request.get_json()
-    query = data.get('query', '').strip()
-    location = data.get('location', 'india').strip() or 'india'
-    page = data.get('page', 1)
+    query = data.get('query', 'developer')
+    location = data.get('location', '').strip() or 'India'
+    query_words = [w.lower() for w in query.split() if len(w) > 2]
 
-    if not query:
-        return jsonify({'error': 'Please enter a job title or skills'}), 400
+    def score(title, desc):
+        t, d = title.lower(), desc.lower()
+        matches = sum(1 for w in query_words if w in t or w in d)
+        return min(95, 50 + (matches * 18)) if matches > 0 else 35
 
-    ADZUNA_APP_ID = '834eb1b0'
-    ADZUNA_APP_KEY = 'fa213ae469a9a0b8ae761ee4f7bdab1a'
+    jobs = []
 
+    # JSearch — aggregates Indeed, LinkedIn, Glassdoor, Naukri etc.
     try:
-        url = "https://jsearch.p.rapidapi.com/search"
-        headers = {
-            "x-rapidapi-host": "jsearch.p.rapidapi.com",
-            "x-rapidapi-key": "c4a2d052f4mshb96cf15200ecc90p14f4dejsne487aadda036"
-        }
-        params = {
-            "query": f"{query} in {location}",
-            "page": str(page),
-            "num_results": "20",
-            "date_posted": "all"
-        }
-        resp = requests.get(url, headers=headers, params=params, timeout=10)
-        resp.raise_for_status()
-        results = resp.json()
-
-        jobs = []
-        for job in results.get('data', []):
-            title = job.get('job_title', '')
-            company = job.get('employer_name', 'Unknown')
-            location_name = ', '.join(filter(None, [job.get('job_city') or '', job.get('job_state') or '', job.get('job_country') or '']))
-            description = job.get('job_description', '')
-            redirect_url = job.get('job_apply_link', '')
-            salary_min = job.get('job_min_salary')
-            salary_max = job.get('job_max_salary')
-
-            query_words = query.lower().split()
-            match_count = sum(1 for w in query_words if w in title.lower() or w in description.lower())
-            fit_score = min(95, 60 + (match_count / max(len(query_words), 1)) * 35)
-            fit_score = round(fit_score)
-
-            salary_str = ''
-            if salary_min and salary_max:
-                salary_str = f'₹{int(salary_min):,} – ₹{int(salary_max):,}'
-
+        jsearch_key = os.environ.get('JSEARCH_KEY', '')
+        resp = requests.get(
+            'https://jsearch.p.rapidapi.com/search',
+            headers={
+                'X-RapidAPI-Key': jsearch_key,
+                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+            },
+            params={
+                'query': f"{query} in {location}",
+                'num_pages': '2',
+                'date_posted': 'month'
+            },
+            timeout=15
+        )
+        for j in resp.json().get('data', []):
+            title = j.get('job_title', '')
+            desc  = j.get('job_description', '')
+            salary = ''
+            if j.get('job_min_salary') and j.get('job_max_salary'):
+                salary = f"{j['job_currency'] or '₹'}{int(j['job_min_salary']):,} - {int(j['job_max_salary']):,}"
             jobs.append({
                 'title': title,
-                'company': company,
-                'location': location_name,
-                'salary': salary_str,
-                'description': description[:200] + '...' if len(description) > 200 else description,
-                'url': redirect_url,
-                'fit_score': fit_score
+                'company': j.get('employer_name', ''),
+                'location': j.get('job_city', '') or j.get('job_country', '') or location,
+                'url': j.get('job_apply_link', '') or j.get('job_google_link', ''),
+                'description': desc[:300],
+                'created': (j.get('job_posted_at_datetime_utc') or '')[:10],
+                'salary': salary,
+                'fit_score': score(title, desc),
+                'source': j.get('job_publisher', '')
             })
-
-        jobs.sort(key=lambda x: x['fit_score'], reverse=True)
-        return jsonify({'success': True, 'jobs': jobs, 'total': len(jobs), 'query': query})
-
     except Exception as e:
-        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+        print(f"JSearch error: {e}")
 
+    # Fallback — Remotive for remote jobs
+    try:
+        resp2 = requests.get(
+            'https://remotive.com/api/remote-jobs',
+            params={'search': query, 'limit': 10},
+            timeout=15
+        )
+        for j in resp2.json().get('jobs', []):
+            title = j.get('title', '')
+            desc  = j.get('description', '')
+            jobs.append({
+                'title': title,
+                'company': j.get('company_name', ''),
+                'location': j.get('candidate_required_location', 'Worldwide Remote'),
+                'url': j.get('url', ''),
+                'description': desc[:300],
+                'created': j.get('publication_date', '')[:10],
+                'salary': j.get('salary', ''),
+                'fit_score': score(title, desc),
+                'source': 'Remotive'
+            })
+    except Exception as e:
+        print(f"Remotive error: {e}")
 
+    if not jobs:
+        return jsonify({'error': 'No jobs found. Try different keywords.'}), 404
+
+    jobs.sort(key=lambda x: x['fit_score'], reverse=True)
+    return jsonify({'success': True, 'jobs': jobs[:30], 'total': len(jobs)})
+
+@app.route('/api/job-finder/apply', methods=['POST'])
+def job_finder_apply():
+    if "user" not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    data = request.get_json()
+    title = data.get('title', 'Unknown Role')
+    company = data.get('company', 'Unknown Company')
+    location = data.get('location', '')
+    url = data.get('url', '')
+    conn = get_db()
+    # avoid duplicate entries
+    existing = conn.execute(
+        "SELECT id FROM applications WHERE username=? AND job_title=? AND company=?",
+        (session["user"], title, company)
+    ).fetchone()
+    if not existing:
+        conn.execute(
+    "INSERT INTO applications (username, job_title, company, status, applied_at) VALUES (?,?,?,?,?)",
+    (session["user"], title, company, 'Applied', datetime.now().isoformat())
+)
+        conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+  
 @app.route('/api/job-finder/extract-skills', methods=['POST'])
 def extract_skills_from_resume():
     if 'resume' not in request.files:
@@ -4537,6 +4675,102 @@ Resume:
         return jsonify({'success': True, 'data': parsed})
     except Exception as e:
         return jsonify({'error': f'AI extraction failed: {str(e)}'}), 500
-      
+ 
+@app.route('/api/resume-builder/export-pdf', methods=['POST'])
+def resume_export_pdf():
+    if "user" not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+        data = request.get_json()
+        
+        # Normalize frontend field names to PDF renderer expectations
+        if 'edu' in data and data['edu']:
+            data['edu'] = [{'degree': e.get('degree',''), 'college': e.get('institution', e.get('college','')), 'from': e.get('start',''), 'to': e.get('end',''), 'percent': e.get('percent','')} for e in data['edu']]
+        
+        name = data.get('name', 'Resume')
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+            leftMargin=20*mm, rightMargin=20*mm,
+            topMargin=20*mm, bottomMargin=20*mm)
+
+        blue = colors.HexColor('#2563eb')
+        gray = colors.HexColor('#555555')
+
+        styles = getSampleStyleSheet()
+        s_name     = ParagraphStyle('n', fontSize=22, textColor=blue, alignment=TA_CENTER, spaceAfter=2)
+        s_title    = ParagraphStyle('t', fontSize=12, textColor=gray, alignment=TA_CENTER, spaceAfter=2)
+        s_contact  = ParagraphStyle('c', fontSize=10, textColor=gray, alignment=TA_CENTER, spaceAfter=8)
+        s_heading  = ParagraphStyle('h', fontSize=11, textColor=blue, fontName='Helvetica-Bold', spaceBefore=10, spaceAfter=4, borderPadding=(0,0,2,0))
+        s_body     = ParagraphStyle('b', fontSize=10, spaceAfter=2)
+        s_bold     = ParagraphStyle('bb', fontSize=10, fontName='Helvetica-Bold', spaceAfter=1)
+        s_sub      = ParagraphStyle('sub', fontSize=9, textColor=gray, spaceAfter=3)
+
+        story = []
+
+        story.append(Paragraph(data.get('name',''), s_name))
+        if data.get('title'): story.append(Paragraph(data['title'], s_title))
+        contact = ' | '.join(filter(None,[data.get('email',''), data.get('phone',''), data.get('location','')]))
+        if contact: story.append(Paragraph(contact, s_contact))
+        links = ' | '.join(filter(None,[data.get('linkedin',''), data.get('github','')]))
+        if links: story.append(Paragraph(links, s_contact))
+
+        if data.get('summary'):
+            story.append(Paragraph('PROFILE', s_heading))
+            story.append(Spacer(1, 1))
+            story.append(Paragraph(data['summary'], s_body))
+
+        if data.get('exp'):
+            story.append(Paragraph('EXPERIENCE', s_heading))
+            for e in data['exp']:
+                story.append(Paragraph(f"{e.get('title','')} — {e.get('company','')}", s_bold))
+                story.append(Paragraph(f"{e.get('start','')} — {e.get('end','')}", s_sub))
+                if e.get('desc'): story.append(Paragraph(e['desc'], s_body))
+
+        if data.get('edu'):
+            story.append(Paragraph('EDUCATION', s_heading))
+            for e in data['edu']:
+                story.append(Paragraph(e.get('degree',''), s_bold))
+                pct = (' | ' + e['percent']) if e.get('percent') else ''
+                story.append(Paragraph(f"{e.get('college','')} | {e.get('from','')} — {e.get('to','')}{pct}", s_sub))
+
+        if data.get('skill'):
+            story.append(Paragraph('SKILLS', s_heading))
+            story.append(Paragraph(', '.join([s.get('name','') for s in data['skill']]), s_body))
+
+        if data.get('proj'):
+            story.append(Paragraph('PROJECTS', s_heading))
+            for p in data['proj']:
+                story.append(Paragraph(p.get('title',''), s_bold))
+                if p.get('desc'): story.append(Paragraph(p['desc'], s_body))
+
+        if data.get('cert'):
+            story.append(Paragraph('CERTIFICATIONS', s_heading))
+            for c in data['cert']:
+                story.append(Paragraph(f"{c.get('title','')} — {c.get('issuer','')} {c.get('date','')}", s_body))
+
+        if data.get('lang'):
+            story.append(Paragraph('LANGUAGES', s_heading))
+            story.append(Paragraph(', '.join([l.get('name','') + (' (' + l.get('level','') + ')' if l.get('level') else '') for l in data['lang']]), s_body))
+
+        if data.get('extra'):
+            story.append(Paragraph('EXTRA CURRICULAR', s_heading))
+            for x in data['extra']:
+                story.append(Paragraph(f"{x.get('title','')} — {x.get('org','')}", s_bold))
+                if x.get('desc'): story.append(Paragraph(x['desc'], s_body))
+
+        doc.build(story)
+        buffer.seek(0)
+        return send_file(buffer, mimetype='application/pdf', as_attachment=True,
+                         download_name=f"{name.replace(' ','_')}_resume.pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001, use_reloader=False)
