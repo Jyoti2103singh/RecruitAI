@@ -4784,5 +4784,21 @@ def resume_export_pdf():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/chat', methods=['POST'])
+def landing_chat():
+    data = request.get_json()
+    msg = data.get('message', '')
+    prompt = f"""You are RecruitAI's helpful assistant on the landing page. 
+Answer questions about RecruitAI's features: AI resume screening, candidate ranking, 
+resume builder, job finder, analytics dashboard, and interview assistant.
+Keep responses short, friendly, and under 2 sentences.
+User message: {msg}"""
+    try:
+        reply = gemini(prompt)
+        return jsonify({'reply': reply})
+    except:
+        return jsonify({'reply': 'I am here to help! Please sign up to explore all RecruitAI features.'})
+      
+      
 if __name__ == '__main__':
     app.run(debug=True, port=5001, use_reloader=False)

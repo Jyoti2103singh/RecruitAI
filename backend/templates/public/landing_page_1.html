@@ -288,7 +288,7 @@
 <span class="material-symbols-outlined text-on-primary text-sm">smart_toy</span>
 </div>
 <div>
-<div class="text-on-surface font-semibold text-sm">Lumina Recruiter</div>
+<div class="text-on-surface font-semibold text-sm">RecruitAI Assistant</div>
 <div class="text-[10px] text-primary flex items-center gap-1 uppercase tracking-tighter">
 <span class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>AI Online
 </div>
@@ -296,10 +296,10 @@
 </div>
 <button class="text-on-surface-variant hover:text-white"><span class="material-symbols-outlined text-lg">close</span></button>
 </div>
-<div class="p-md space-y-md h-64 overflow-y-auto">
+<div class="p-md space-y-md h-64 overflow-y-auto" id="chat-messages">
 <div class="flex gap-sm">
 <div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">
-    Hello! I'm Lumina's AI recruiter. How can I help you find your next superstar today?
+    Hello! I'm RecruitAI's AI recruiter. How can I help you find your next superstar today?
 </div>
 </div>
 <div class="flex justify-end gap-sm">
@@ -309,17 +309,42 @@
 </div>
 </div>
 <div class="p-md border-t border-white/10 flex gap-sm">
-<input class="flex-1 bg-surface-container-lowest rounded-xl text-sm px-sm py-2 border-none outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="Type your message..." type="text"/>
-<button class="bg-primary p-2 rounded-xl text-on-primary"><span class="material-symbols-outlined">send</span></button>
+<input id="chat-input" class="flex-1 bg-surface-container-lowest rounded-xl text-sm px-sm py-2 border-none outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="Type your message..." type="text"/>
+<button id="chat-send" class="bg-primary p-2 rounded-xl text-on-primary"><span class="material-symbols-outlined">send</span></button>
 </div>
 </div>
-<button class="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_0_20px_rgba(128,131,255,0.4)] hover:shadow-[0_0_40px_rgba(128,131,255,0.6)] transition-all duration-300 relative overflow-hidden group-hover:scale-110 active:scale-90">
-<div class="absolute inset-0 bg-gradient-to-tr from-primary via-primary-container to-secondary opacity-50 group-hover:opacity-100 transition-opacity"></div>
-<span class="material-symbols-outlined text-3xl relative z-10">chat</span>
+<button id="chat-btn" class="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg transition-all duration-300 active:scale-90">
+<span class="material-symbols-outlined text-3xl">chat</span>
 </button>
 </div>
 
 <script>
+    const chatWindow = document.getElementById('chat-window');
+    const chatBtn = document.getElementById('chat-btn');
+    chatBtn.addEventListener('click', () => {
+        chatWindow.classList.toggle('opacity-0');
+        chatWindow.classList.toggle('translate-y-10');
+        chatWindow.classList.toggle('pointer-events-none');
+    });
+    document.querySelector('#chat-window button').addEventListener('click', (e) => {
+        e.stopPropagation();
+        chatWindow.classList.add('opacity-0','translate-y-10','pointer-events-none');
+    });
+    document.getElementById('chat-send').addEventListener('click', sendMessage);
+    document.getElementById('chat-input').addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
+    async function sendMessage(){
+        const input = document.getElementById('chat-input');
+        const msg = input.value.trim();
+        if(!msg) return;
+        const box = document.getElementById('chat-messages');
+        box.innerHTML += `<div class="flex justify-end gap-sm"><div class="bg-primary p-sm rounded-2xl rounded-tr-none text-xs text-on-primary max-w-[80%]">${msg}</div></div>`;
+        input.value = '';
+        box.scrollTop = box.scrollHeight;
+        const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: msg})});
+        const d = await res.json();
+        box.innerHTML += `<div class="flex gap-sm"><div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">${d.reply||'Sorry, I could not respond.'}</div></div>`;
+        box.scrollTop = box.scrollHeight;
+    }
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) entry.target.classList.add('active');
