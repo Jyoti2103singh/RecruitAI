@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Resume Builder – RecruitAI</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script><style>
   :root {
     --bg: #0f0f13; --surface: #18181f; --surface2: #22222c;
@@ -791,30 +791,41 @@ function clearAll() {
   renderPreview(); updateATS();
 }
 
-function exportPDF() {
-  const el = document.getElementById('resumePreview');
-  const opt = {
-    margin: 0.5,
-    filename: (document.getElementById('f-name').value || 'resume') + '.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-  };
+async function exportPDF() {
   showToast('⏳ Generating PDF...');
-  html2pdf().set(opt).from(el).save();
+  const data = {
+    name: getVal('f-name'), title: getVal('f-title'),
+    email: getVal('f-email'), phone: getVal('f-phone'),
+    location: getVal('f-location'), linkedin: getVal('f-linkedin'),
+    github: getVal('f-github'), summary: getVal('f-summary'),
+    exp: state.exp, edu: state.edu, skill: state.skill,
+    proj: state.proj, cert: state.cert, lang: state.lang, extra: state.extra
+  };
+  try {
+    const res = await fetch('/api/resume-builder/export-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) { const j = await res.json(); showToast('❌ ' + j.error); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (data.name || 'resume') + '.pdf'; a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ PDF exported!');
+  } catch(e) { showToast('❌ Export failed: ' + e.message); }
 }
 async function exportDOCX() {
   const name = document.getElementById('f-name').value || 'Resume';
   const title = document.getElementById('f-title').value || '';
   const email = document.getElementById('f-email').value || '';
   const phone = document.getElementById('f-phone').value || '';
-  const location = document.getElementById('f-location').value || '';
+  const loc = document.getElementById('f-location').value || '';
   const linkedin = document.getElementById('f-linkedin').value || '';
   const github = document.getElementById('f-github').value || '';
   const summary = document.getElementById('f-summary').value || '';
-
   const { Document, Paragraph, TextRun, HeadingLevel, Packer, AlignmentType, BorderStyle } = docx;
-
   const makeBold = (text) => new TextRun({ text, bold: true, size: 24 });
   const makeText = (text) => new TextRun({ text, size: 22 });
   const makeHeading = (text) => new Paragraph({
@@ -822,93 +833,55 @@ async function exportDOCX() {
     spacing: { before: 200, after: 100 },
     border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' } }
   });
-
   const children = [];
-
-  // Name + contact
   children.push(new Paragraph({ children: [new TextRun({ text: name, bold: true, size: 40 })], alignment: AlignmentType.CENTER }));
   if (title) children.push(new Paragraph({ children: [new TextRun({ text: title, size: 24, color: '555555' })], alignment: AlignmentType.CENTER }));
-  children.push(new Paragraph({ children: [makeText([email, phone, location].filter(Boolean).join('  |  '))], alignment: AlignmentType.CENTER }));
+  children.push(new Paragraph({ children: [makeText([email, phone, loc].filter(Boolean).join('  |  '))], alignment: AlignmentType.CENTER }));
   if (linkedin || github) children.push(new Paragraph({ children: [makeText([linkedin, github].filter(Boolean).join('  |  '))], alignment: AlignmentType.CENTER }));
   children.push(new Paragraph({ text: '' }));
-
-  // Summary
-  if (summary) {
-    children.push(makeHeading('PROFILE'));
-    children.push(new Paragraph({ children: [makeText(summary)] }));
-    children.push(new Paragraph({ text: '' }));
-  }
-
-  // Experience
-  if (experienceList && experienceList.length) {
+  if (summary) { children.push(makeHeading('PROFILE')); children.push(new Paragraph({ children: [makeText(summary)] })); children.push(new Paragraph({ text: '' })); }
+  if (state.exp && state.exp.length) {
     children.push(makeHeading('EXPERIENCE'));
-    experienceList.forEach(e => {
-      children.push(new Paragraph({ children: [makeBold(e.title + ' — ' + e.company), makeText('  ' + (e.start||'') + (e.end ? ' – ' + e.end : ''))] }));
+    state.exp.forEach(e => {
+      children.push(new Paragraph({ children: [makeBold(e.title + ' — ' + e.company), makeText('  ' + (e.start||'') + (e.end ? ' — ' + e.end : ''))] }));
       if (e.desc) children.push(new Paragraph({ children: [makeText(e.desc)], spacing: { after: 100 } }));
     });
     children.push(new Paragraph({ text: '' }));
   }
-
-  // Education
-  if (educationList && educationList.length) {
+  if (state.edu && state.edu.length) {
     children.push(makeHeading('EDUCATION'));
-    educationList.forEach(e => {
-      children.push(new Paragraph({ children: [makeBold(e.degree + ' — ' + e.institution), makeText('  ' + (e.start||'') + (e.end ? ' – ' + e.end : ''))] }));
-      if (e.desc) children.push(new Paragraph({ children: [makeText(e.desc)], spacing: { after: 100 } }));
+    state.edu.forEach(e => {
+      children.push(new Paragraph({ children: [makeBold(e.degree), makeText('  ' + (e.college||'') + (e.from ? ' | ' + e.from + ' — ' + (e.to||'') : '') + (e.percent ? ' | ' + e.percent : ''))] }));
     });
     children.push(new Paragraph({ text: '' }));
   }
-
-  // Skills
-  if (skillList && skillList.length) {
+  if (state.skill && state.skill.length) {
     children.push(makeHeading('SKILLS'));
-    children.push(new Paragraph({ children: [makeText(skillList.map(s => s.name).join(', '))] }));
+    children.push(new Paragraph({ children: [makeText(state.skill.map(s => s.name).join(', '))] }));
     children.push(new Paragraph({ text: '' }));
   }
-
-  // Projects
-  if (projectList && projectList.length) {
+  if (state.proj && state.proj.length) {
     children.push(makeHeading('PROJECTS'));
-    projectList.forEach(p => {
+    state.proj.forEach(p => {
       children.push(new Paragraph({ children: [makeBold(p.title)] }));
-      if (p.tech) children.push(new Paragraph({ children: [makeText('Technologies: ' + p.tech)] }));
       if (p.desc) children.push(new Paragraph({ children: [makeText(p.desc)], spacing: { after: 100 } }));
     });
     children.push(new Paragraph({ text: '' }));
   }
-
-  // Certifications
-  if (certList && certList.length) {
+  if (state.cert && state.cert.length) {
     children.push(makeHeading('CERTIFICATIONS'));
-    certList.forEach(c => {
-      children.push(new Paragraph({ children: [makeBold(c.title), makeText('  ' + (c.issuer||'') + (c.date ? ' · ' + c.date : ''))] }));
-    });
+    state.cert.forEach(c => { children.push(new Paragraph({ children: [makeBold(c.title), makeText('  ' + (c.issuer||'') + (c.date ? ' · ' + c.date : ''))] })); });
     children.push(new Paragraph({ text: '' }));
   }
-
-  // Languages
-  if (languageList && languageList.length) {
+  if (state.lang && state.lang.length) {
     children.push(makeHeading('LANGUAGES'));
-    children.push(new Paragraph({ children: [makeText(languageList.map(l => l.name + (l.level ? ' (' + l.level + ')' : '')).join(', '))] }));
-    children.push(new Paragraph({ text: '' }));
+    children.push(new Paragraph({ children: [makeText(state.lang.map(l => l.name + (l.level ? ' (' + l.level + ')' : '')).join(', '))] }));
   }
-
-  // Extra Curricular
-  if (extraList && extraList.length) {
-    children.push(makeHeading('EXTRA CURRICULAR'));
-    extraList.forEach(x => {
-      children.push(new Paragraph({ children: [makeBold(x.title + (x.org ? ' — ' + x.org : '')), makeText(x.type ? '  ' + x.type : '')] }));
-      if (x.desc) children.push(new Paragraph({ children: [makeText(x.desc)], spacing: { after: 100 } }));
-    });
-  }
-
   const doc = new Document({ sections: [{ properties: {}, children }] });
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = (name || 'resume') + '.docx';
-  a.click();
+  a.href = url; a.download = (name || 'resume') + '.docx'; a.click();
   URL.revokeObjectURL(url);
   showToast('✅ DOCX exported!');
 }
@@ -952,6 +925,13 @@ function getRoadmap() {
 
 renderPreview();
 updateATS();
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:30px;right:30px;background:#6c63ff;color:#fff;padding:12px 20px;border-radius:8px;z-index:9999;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
 </script>
 </body>
 </html>

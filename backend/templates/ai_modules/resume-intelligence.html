@@ -3,65 +3,65 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Resume Intelligence - Lumina AI</title>
+    <title>Resume Intelligence - RecruitAI</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-950 text-white min-h-screen">
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen">
 
-<nav class="fixed left-0 top-0 h-full w-[220px] bg-gray-900 border-r border-gray-800 flex flex-col py-8 px-4 z-50">
-    <h1 class="text-purple-400 font-bold text-lg mb-8">Lumina AI</h1>
-    <a href="/dashboard"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📊 Dashboard</a>
-    <a href="/upload"             class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📤 Upload Resume</a>
-    <a href="/screening"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🔍 AI Screening</a>
-    <a href="/results"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📋 Results</a>
-    <a href="/candidates"         class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">👥 Candidates</a>
-    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">⚖️ Compare</a>
-    <a href="/history"            class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">🕐 History</a>
-    <a href="/analytics"          class="flex items-center gap-3 text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 mb-1">📈 Analytics</a>
+<nav class="fixed left-0 top-0 h-full w-[220px] bg-gradient-to-b from-indigo-900 to-slate-900 border-r border-indigo-700 flex flex-col py-8 px-4 z-50">
+    <h1 class="text-indigo-300 font-bold text-lg mb-8">🎯 RecruitAI</h1>
+    <a href="/dashboard"          class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">📊 Dashboard</a>
+    <a href="/upload"             class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">📤 Upload Resume</a>
+    <a href="/screening"          class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">🔍 AI Screening</a>
+    <a href="/results"            class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">📋 Results</a>
+    <a href="/candidates"         class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">👥 Candidates</a>
+    <a href="/compare-candidates" class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">⚖️ Compare</a>
+    <a href="/history"            class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">🕐 History</a>
+    <a href="/analytics"          class="flex items-center gap-3 text-gray-200 hover:text-white px-3 py-2 rounded-lg hover:bg-indigo-700/30 mb-1 transition-all">📈 Analytics</a>
     <a href="/logout"             class="flex items-center gap-3 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 mt-auto">🚪 Logout</a>
 </nav>
 
 <main class="ml-[220px] p-8">
     <div class="mb-8">
-        <h1 class="text-3xl font-bold">Resume Intelligence</h1>
-        <p class="text-gray-400 mt-1">Deep analysis and optimization suggestions for any resume</p>
+        <h1 class="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-blue-300 bg-clip-text text-transparent">Resume Intelligence</h1>
+        <p class="text-gray-300 mt-2">Deep analysis and optimization suggestions for any resume</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-            <h3 class="font-bold text-lg mb-4">Paste Resume Text</h3>
+        <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl border border-indigo-500/30 p-6 shadow-lg hover:shadow-indigo-500/20 transition-all">
+            <h3 class="font-bold text-lg text-indigo-300 mb-4">Paste Resume Text</h3>
             <textarea id="resumeText" rows="12" placeholder="Paste the candidate's resume text here for analysis..."
-                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 resize-none"></textarea>
+                class="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 resize-none"></textarea>
             <input id="targetRole" type="text" placeholder="Target Job Role (e.g. Data Engineer)"
-                class="w-full mt-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-purple-500"/>
-            <button onclick="analyzeResume()" class="w-full mt-4 bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all">
+                class="w-full mt-3 bg-slate-900 border border-indigo-500/50 rounded-xl px-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30"/>
+            <button onclick="analyzeResume()" class="w-full mt-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-indigo-500/50">
                 🧠 Analyze Resume
             </button>
         </div>
 
-        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-            <h3 class="font-bold text-lg mb-4">Intelligence Report</h3>
-            <div id="intelligenceOutput" class="text-gray-400 text-sm italic">
+        <div class="bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl border border-indigo-500/30 p-6 shadow-lg">
+            <h3 class="font-bold text-lg text-indigo-300 mb-4">Intelligence Report</h3>
+            <div id="intelligenceOutput" class="text-gray-300 text-sm italic">
                 Paste resume text and click Analyze to generate intelligence report...
             </div>
         </div>
     </div>
 
     <!-- TIPS -->
-    <div class="mt-6 bg-gray-900 rounded-2xl border border-gray-800 p-6">
-        <h3 class="font-bold text-lg mb-4">💡 Resume Optimization Tips</h3>
+    <div class="mt-6 bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl border border-indigo-500/30 p-6 shadow-lg">
+        <h3 class="font-bold text-lg text-indigo-300 mb-4">💡 Resume Optimization Tips</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
-                <p class="font-bold text-purple-300 mb-2">ATS Optimization</p>
-                <p class="text-gray-400 text-sm">Use exact keywords from job descriptions. Avoid tables and graphics that ATS can't parse.</p>
+            <div class="bg-indigo-900/30 border border-indigo-500/40 rounded-xl p-4 hover:bg-indigo-900/50 transition-all">
+                <p class="font-bold text-indigo-300 mb-2">ATS Optimization</p>
+                <p class="text-gray-300 text-sm">Use exact keywords from job descriptions. Avoid tables and graphics that ATS can't parse.</p>
             </div>
-            <div class="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <div class="bg-blue-900/30 border border-blue-500/40 rounded-xl p-4 hover:bg-blue-900/50 transition-all">
                 <p class="font-bold text-blue-300 mb-2">Quantify Achievements</p>
-                <p class="text-gray-400 text-sm">Replace "improved performance" with "improved API response time by 40%".</p>
+                <p class="text-gray-300 text-sm">Replace "improved performance" with "improved API response time by 40%".</p>
             </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-                <p class="font-bold text-green-300 mb-2">Skills Section</p>
-                <p class="text-gray-400 text-sm">List both technical and soft skills. Group them by category for clarity.</p>
+            <div class="bg-cyan-900/30 border border-cyan-500/40 rounded-xl p-4 hover:bg-cyan-900/50 transition-all">
+                <p class="font-bold text-cyan-300 mb-2">Skills Section</p>
+                <p class="text-gray-300 text-sm">List both technical and soft skills. Group them by category for clarity.</p>
             </div>
         </div>
     </div>
@@ -83,28 +83,28 @@ function analyzeResume() {
 
     document.getElementById('intelligenceOutput').innerHTML = `
         <div class="space-y-4">
-            <div class="flex items-center justify-between bg-gray-800 rounded-xl p-4">
-                <span class="text-gray-300 font-bold">ATS Score Estimate</span>
-                <span class="text-2xl font-bold text-purple-400">${atsScore}%</span>
+            <div class="flex items-center justify-between bg-slate-900 border border-indigo-500/30 rounded-xl p-4">
+                <span class="text-gray-200 font-bold">ATS Score Estimate</span>
+                <span class="text-2xl font-bold text-indigo-400">${atsScore}%</span>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <div class="bg-gray-800 rounded-xl p-3 text-center">
-                    <p class="text-lg font-bold">${wordCount}</p>
+                <div class="bg-slate-900 border border-indigo-500/30 rounded-xl p-3 text-center">
+                    <p class="text-lg font-bold text-indigo-300">${wordCount}</p>
                     <p class="text-gray-400 text-xs">Word Count</p>
                 </div>
-                <div class="bg-gray-800 rounded-xl p-3 text-center">
-                    <p class="text-lg font-bold text-${hasEmail ? 'green' : 'red'}-400">${hasEmail ? '✅' : '❌'}</p>
+                <div class="bg-slate-900 border border-indigo-500/30 rounded-xl p-3 text-center">
+                    <p class="text-lg font-bold text-${hasEmail ? 'emerald' : 'rose'}-400">${hasEmail ? '✅' : '❌'}</p>
                     <p class="text-gray-400 text-xs">Email Found</p>
                 </div>
             </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-                <p class="text-green-400 font-bold mb-2">Keywords Detected (${foundKeywords.length})</p>
+            <div class="bg-emerald-900/30 border border-emerald-500/40 rounded-xl p-4">
+                <p class="text-emerald-400 font-bold mb-2">Keywords Detected (${foundKeywords.length})</p>
                 <div class="flex flex-wrap gap-2">
-                    ${foundKeywords.map(k => `<span class="bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs">${k}</span>`).join('') || '<span class="text-gray-500">None found</span>'}
+                    ${foundKeywords.map(k => `<span class="bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full text-xs">${k}</span>`).join('') || '<span class="text-gray-500">None found</span>'}
                 </div>
             </div>
-            <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-                <p class="text-yellow-400 font-bold mb-2">💡 Suggestions for ${role}</p>
+            <div class="bg-amber-900/30 border border-amber-500/40 rounded-xl p-4">
+                <p class="text-amber-400 font-bold mb-2">💡 Suggestions for ${role}</p>
                 <ul class="text-gray-300 text-sm space-y-1">
                     ${wordCount < 300 ? '<li>• Resume is too short — add more detail</li>' : ''}
                     ${!hasEmail ? '<li>• Missing email address</li>' : ''}

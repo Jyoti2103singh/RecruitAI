@@ -251,7 +251,7 @@ async function searchJobs(query, location) {
     if (!data.success) { showError(data.error || 'Search failed'); document.getElementById('resultsArea').innerHTML = ''; return; }
 
     currentJobs = data.jobs;
-    renderJobs(data.jobs, data.total, q);
+    renderJobs(data.jobs, data.jobs.length, q);
   } catch(e) {
     showError('Network error — make sure Flask is running');
     document.getElementById('resultsArea').innerHTML = '';
@@ -322,7 +322,7 @@ function jobCard(job) {
           <div class="job-title">${job.title}</div>
           <div class="company-name">${job.company}</div>
         </div>
-        <div class="fit-badge ${fitClass}">${job.fit_score}% fit</div>
+        <div style="text-align:right"><div class="fit-badge ${fitClass}">${job.fit_score}% fit</div>${job.source ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${job.source}</div>` : ''}</div>
       </div>
       <div class="card-meta">
         ${job.location ? `<div class="meta-chip">📍 ${job.location}</div>` : ''}
@@ -332,8 +332,8 @@ function jobCard(job) {
       <div class="job-desc">${job.description}</div>
       <div class="card-footer">
         <div class="job-date">${job.created ? '📅 ' + job.created : ''}</div>
-        <a href="${job.url}" target="_blank" class="btn-apply">Apply Now →</a>
-      </div>
+        <button class="btn-apply" data-url="${encodeURIComponent(job.url)}" data-title="${encodeURIComponent(job.title)}" data-company="${encodeURIComponent(job.company)}" data-location="${encodeURIComponent(job.location)}" onclick="applyToJob(this)">Apply Now →</button>
+        </div>
     </div>`;
 }
 
@@ -391,6 +391,23 @@ function searchFromResume() {
   const location = document.getElementById('eqLocation').value || 'India';
   const query = role + ' ' + skills.slice(0, 3).join(' ');
   searchJobs(query, location);
+}
+async function applyToJob(btn) {
+  const url = decodeURIComponent(btn.dataset.url || '');
+  const title = decodeURIComponent(btn.dataset.title || '');
+  const company = decodeURIComponent(btn.dataset.company || '');
+  const location = decodeURIComponent(btn.dataset.location || '');
+  if (!url) { showToast('❌ No application URL for this job'); return; }
+  btn.disabled = true;
+  btn.textContent = '✅ Opening...';
+  await fetch('/api/job-finder/apply', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({title, company, location, url})
+  }).catch(()=>{});
+  window.open(url, '_blank');
+  btn.textContent = '✅ Applied';
+  btn.style.background = '#34d399';
 }
 </script>
 </body>
