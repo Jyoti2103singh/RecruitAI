@@ -202,6 +202,18 @@ def index():
         return render_template('public/landing_page_1.html')  # show landing page
     return redirect(url_for('candidate_dashboard'))  # logged in → go to dashboard
 
+@app.route("/resume-intelligence")
+def resume_intelligence():
+    return render_template('ai_modules/resume-intelligence.html')
+
+@app.route("/resources")
+def resources():
+    return render_template('public/resources.html')
+
+@app.route("/solutions")
+def solutions():
+    return render_template('public/solutions.html')
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
