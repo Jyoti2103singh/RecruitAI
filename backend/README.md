@@ -1,43 +1,46 @@
-# 🤖 RecruitAI
+# RecruitAI backend
 
-An AI-powered recruitment platform built with Flask and Groq (LLaMA 3.3), designed to streamline hiring for recruiters and job searching for candidates.
+## Live India vacancies
 
-## ✨ Features
+The job board supports authorized Adzuna India results. Set these environment
+variables before starting Flask:
 
-### For Candidates
-- 📄 **Resume Builder** — Build professional resumes with 8+ templates, live preview, and PDF/DOCX export
-- 🧠 **AI Resume Parser** — Upload your existing resume (DOCX) and auto-fill the builder
-- 📊 **ATS Score** — Get instant ATS compatibility score with improvement tips
-- 🚀 **AI Career Tools** — Generate portfolio project ideas and career roadmaps
-- 💼 **Job Board** — Browse and apply to jobs with one click
-
-### For Recruiters
-- 📋 **Job Posting** — Post and manage job listings
-- 🔍 **AI Resume Screening** — Automatically screen and rank candidates
-- 📊 **Analytics Dashboard** — Track applications, views, and hiring metrics
-- 🤝 **Candidate Comparison** — Compare candidates side by side with AI insights
-- 🎤 **AI Interview Questions** — Generate role-specific interview questions
-
-## 🛠 Tech Stack
-
-- **Backend** — Python, Flask, SQLite
-- **AI** — Groq API (LLaMA 3.3 70B)
-- **Frontend** — HTML, CSS, JavaScript
-- **PDF Export** — html2pdf.js
-- **DOCX Export** — docx.js
-
-## 🚀 Getting Started
-
-### 1. Clone the repo
-```bash
-git clone https://github.com/Jyoti2103singh/RecruitAI.git
-cd RecruitAI/backend
+```text
+ADZUNA_APP_ID=your_app_id
+ADZUNA_APP_KEY=your_app_key
 ```
 
-### 2. Install dependencies
+The board keeps the employer name, listing details, and Adzuna redirect URL so
+the candidate applies on the original vacancy page. Arbeitnow and Remotive are
+also used for additional live listings when available.
+
+## Setup
+
+Install the backend dependencies and start Flask from this directory:
+
 ```bash
 pip install -r requirements.txt
+python app.py
 ```
 
-### 3. Set up environment variables
-Create a `.env` file in the `backend/` folder:
+RecruitAI is available at `http://127.0.0.1:5000`. Flask serves the HTML, CSS,
+and JavaScript frontend from the backend project, so no separate frontend
+server is required.
+
+## Environment variables
+
+Create `backend/.env` locally and add the values needed for your environment:
+
+```text
+GEMINI_KEY=your_gemini_api_key
+SECRET_KEY=replace_with_a_random_secret
+ADZUNA_APP_ID=your_app_id
+ADZUNA_APP_KEY=your_app_key
+```
+
+The chat assistant sends messages from the landing page to `POST /api/ai/chat`.
+Gemini generates conversational answers when `GEMINI_KEY` is configured; the
+application uses local fallback responses if the AI service is unavailable.
+
+Never commit `.env` or real API keys. Use placeholder values in documentation
+or a `.env.example` file instead.
