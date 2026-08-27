@@ -248,6 +248,19 @@
       .sidebar { display: none; }
       .main { margin-left: 0; padding: 16px; }
     }
+    body {
+      background: radial-gradient(circle at 82% 8%, rgba(38,198,218,.16), transparent 28rem), radial-gradient(circle at 15% 78%, rgba(124,106,245,.15), transparent 32rem), linear-gradient(135deg, #071526 0%, #0b1728 48%, #10152b 100%);
+    }
+    body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .28; background-image: linear-gradient(rgba(83,211,225,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(83,211,225,.07) 1px, transparent 1px); background-size: 42px 42px; mask-image: linear-gradient(to bottom, black, transparent 82%); }
+    .sidebar, .card, .stat-card, .notif-panel { background: rgba(13,28,48,.86); border-color: rgba(103,185,215,.2); box-shadow: 0 18px 50px rgba(2,10,25,.24); }
+    .sidebar { backdrop-filter: blur(18px); }
+    .card:hover, .stat-card:hover { border-color: rgba(83,211,225,.6); }
+    .nav-item.active { color: #65e6e0; border-left-color: #65e6e0; background: rgba(44,211,207,.12); }
+    .page-title span, .card-link, .mark-all-btn { color: #65e6e0; }
+    .sidebar-logo { color: #9e9bff; }
+    .sidebar-logo span { color: #d9f8ff; }
+    .user-avatar { background: linear-gradient(135deg, #7967f5, #25c9d1); }
+    .score-bar, .progress-bar { background: linear-gradient(90deg, #7967f5, #25c9d1); }
   </style>
 </head>
 <body>
