@@ -1,50 +1,20 @@
 import os
-import re 
-import fitz
-import docx as docxlib
 import json
+import re
+import html as html_lib
 import sqlite3
 import requests
-from dotenv import load_dotenv
-load_dotenv()
+import zipfile
 from datetime import datetime
 from io import BytesIO
+from xml.etree import ElementTree
+from dotenv import load_dotenv
 
-# ── top of file ──────────────────────────────
-import os
 import uuid
-from flask import Flask, render_template, request, jsonify, redirect, url_for
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image
-
-app = Flask(__name__)
-
-# ── config (right after app = Flask) ─────────
-UPLOAD_FOLDER   = 'static/uploads/profile_photos'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
-MAX_FILE_SIZE   = 2 * 1024 * 1024
-MAX_DIMENSION   = (400, 400)
-
-app.config['UPLOAD_FOLDER']       = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH']  = MAX_FILE_SIZE
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def resize_image(image_path, max_size=MAX_DIMENSION):
-    with Image.open(image_path) as img:
-        if img.mode in ('RGBA', 'P'):
-            img = img.convert('RGB')
-        img.thumbnail(max_size, Image.LANCZOS)
-        img.save(image_path, optimize=True, quality=85)
-
-def delete_old_photo(old_path):
-    if old_path:
-        local_path = old_path.lstrip('/')
-        if os.path.exists(local_path):
-            os.remove(local_path)
-    
 from flask import (
     Flask,
     render_template,
@@ -58,16 +28,26 @@ from flask import (
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 try:
+  from docx import Document
+  from docx.shared import Inches, Pt
+  DOCX_EXPORT_OK = True
+except ImportError:
+  DOCX_EXPORT_OK = False
+try:
     from pdfminer.high_level import extract_text as pdf_extract_text
     PDF_EXTRACT_OK = True
 except ImportError:
     PDF_EXTRACT_OK = False
 
+MAX_RESUME_BYTES = 5 * 1024 * 1024
+
+load_dotenv()
+
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 app.jinja_env.filters['fromjson'] = lambda s: json.loads(s) if s else {}
 
-GROQ_KEY = os.environ.get("GROQ_KEY", "")
+GEMINI_KEY = os.getenv("GEMINI_KEY")
 DB_PATH = "screening.db"
 
 def get_db():
@@ -183,36 +163,143 @@ def push_notification(user, msg_type, message, link="/"):
 
 
 def gemini(prompt):
-    if not GROQ_KEY:
-        return "AI unavailable (no GROQ_KEY set)"
+    if not GEMINI_KEY:
+        return "AI unavailable (no GEMINI_KEY set)"
     try:
-        from groq import Groq
-        client = Groq(api_key=GROQ_KEY)
-        chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-        )
-        return chat_completion.choices[0].message.content
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_KEY}"
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        r = requests.post(url, json=payload, timeout=30)
+        data = r.json()
+        if not r.ok:
+            error = data.get("error", {})
+            return f"AI error: {error.get('message', f'HTTP {r.status_code}')}"
+        candidates = data.get("candidates") or []
+        if not candidates:
+            return "AI error: Gemini returned no response candidates"
+        return candidates[0]["content"]["parts"][0]["text"]
     except Exception as e:
         return f"AI error: {str(e)}"
-    
-@app.route('/')
+
+if True:
+  def parse_ai_json(raw_text, fallback):
+    """Parse model output without turning an unavailable AI service into a UI error."""
+    if not raw_text or raw_text.startswith(("AI unavailable", "AI error")):
+      return fallback
+    cleaned = raw_text.strip()
+    if "```" in cleaned:
+      cleaned = cleaned.split("```", 2)[1].replace("json", "", 1).strip()
+    try:
+      parsed = json.loads(cleaned)
+      return parsed if isinstance(parsed, dict) else fallback
+    except (TypeError, ValueError):
+      return fallback
+
+def basic_resume_from_text(resume_text):
+    """Create editable starter fields when AI configuration is unavailable."""
+    lines = [line.strip() for line in resume_text.splitlines() if line.strip()]
+    email_match = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", resume_text)
+    phone_match = re.search(r"(?:\+?\d[\d\s().-]{7,}\d)", resume_text)
+    links = re.findall(r"https?://[^\s)]+", resume_text)
+    heading_map = {
+        "summary": "summary", "profile": "summary", "objective": "summary",
+        "skills": "skills", "technical skills": "skills",
+        "experience": "experience", "work experience": "experience",
+        "education": "education", "projects": "projects",
+        "certifications": "certifications", "languages": "languages"
+    }
+    sections = {name: [] for name in set(heading_map.values())}
+    current_section = None
+    for line in lines:
+        normalized = re.sub(r"[^a-z ]", "", line.lower()).strip()
+        if normalized in heading_map:
+            current_section = heading_map[normalized]
+        elif current_section:
+            sections[current_section].append(line)
+
+    name = next((line for line in lines[:5] if "@" not in line and not re.search(r"\d{5,}", line)), "")
+    summary = " ".join(sections["summary"])
+    skills = [item.strip() for item in re.split(r"[,|;]", " ".join(sections["skills"])) if item.strip()]
+    return {
+        "name": name, "headline": lines[1] if len(lines) > 1 else "",
+        "email": email_match.group(0) if email_match else "",
+        "phone": phone_match.group(0).strip() if phone_match else "",
+        "location": "", "currentAddress": "", "permanentAddress": "", "summary": summary,
+        "github": next((link for link in links if "github.com" in link), ""),
+        "linkedin": next((link for link in links if "linkedin.com" in link), ""),
+        "portfolio": next((link for link in links if "github.com" not in link and "linkedin.com" not in link), ""),
+        "twitter": "", "skills": skills,
+        "experience": [{"title": line, "company": "", "start": "", "end": "", "desc": ""} for line in sections["experience"]],
+        "education": [{"degree": line, "college": "", "from": "", "to": "", "percent": ""} for line in sections["education"]],
+        "projects": [{"name": line, "tech": "", "desc": ""} for line in sections["projects"]],
+        "extraCurricular": [], "languages": sections["languages"],
+        "certifications": sections["certifications"]
+    }
+
+if True:
+  def build_ats_feedback(resume_text, job_desc=""):
+    """Create useful local ATS feedback when an AI provider is unavailable."""
+    text = (resume_text or "").lower()
+    sections = {
+      "Summary": bool(re.search(r"\b(summary|profile|objective)\b", text)),
+      "Experience": bool(re.search(r"\b(experience|employment|work history)\b", text)),
+      "Education": bool(re.search(r"\b(education|university|college|degree)\b", text)),
+      "Skills": bool(re.search(r"\b(skills|technical skills|technologies)\b", text)),
+      "Projects": bool(re.search(r"\b(projects|portfolio)\b", text)),
+    }
+    vocabulary = ["python", "java", "javascript", "typescript", "react", "node", "flask", "sql", "aws", "docker", "git", "excel", "communication", "leadership"]
+    found_skills = [skill.title() for skill in vocabulary if re.search(rf"\b{re.escape(skill)}\b", text)]
+    job_keywords = set(re.findall(r"[a-z][a-z+#.-]{2,}", (job_desc or "").lower()))
+    matched_keywords = sorted(keyword for keyword in job_keywords if re.search(rf"\b{re.escape(keyword)}\b", text))
+    keyword_match = round((len(matched_keywords) / len(job_keywords)) * 100) if job_keywords else min(85, 35 + len(found_skills) * 8)
+    found_sections = [name for name, present in sections.items() if present]
+    missing_sections = [name for name, present in sections.items() if not present]
+    improvements = []
+    if "Summary" in missing_sections: improvements.append("Add a 2-3 line professional summary tailored to the target role")
+    if "Experience" in missing_sections: improvements.append("Add work experience with measurable achievements")
+    if "Skills" in missing_sections: improvements.append("Add a dedicated skills section using job description keywords")
+    if not re.search(r"\d+%|\$\d+|\b\d+\s+(users|projects|clients|months|years)\b", text): improvements.append("Quantify impact with numbers, percentages, or delivery outcomes")
+    score = max(35, min(95, round((len(found_sections) / len(sections)) * 45 + keyword_match * 0.45)))
+    technical_score = max(30, min(95, round(35 + len(found_skills) * 8 + (12 if sections["Experience"] else 0) + (5 if sections["Projects"] else 0))))
+    overall_fit = round(score * 0.65 + keyword_match * 0.35)
+    grade = "A" if score >= 85 else "B" if score >= 70 else "C+" if score >= 55 else "C"
+    return {
+      "score": score, "ats_score": score, "technical_score": technical_score, "overall_fit": overall_fit,
+      "grade": grade, "keyword_match": keyword_match,
+      "summary": f"Detected {len(found_sections)} of {len(sections)} core resume sections and {len(found_skills)} relevant skills. Add the suggested details to improve search visibility and recruiter review.",
+      "strengths": ([f"Detected skills: {', '.join(found_skills[:6])}"] if found_skills else ["Resume text was received and analyzed"]) + ([f"Matched keywords: {', '.join(matched_keywords[:5])}"] if matched_keywords else []),
+      "weaknesses": improvements[:4] or ["Tailor your strongest achievements to the target role"],
+      "improvements": improvements[:4] or ["Tailor your strongest achievements to the target role"],
+      "skills_found": found_skills, "skills_missing": [],
+      "sections_found": found_sections or ["Resume"], "sections_missing": missing_sections,
+      "recommendation": "Strong match" if score >= 75 else "Improve and resubmit"
+    }
+
+@app.route("/")
 def index():
-    if 'user' not in session:
-        return render_template('public/landing_page_1.html')  # show landing page
-    return redirect(url_for('candidate_dashboard'))  # logged in → go to dashboard
+    if "user" not in session:
+         return render_template("public/landing_page_1.html")
+    return redirect("/recruiter/dashboard" if session.get("role") == "recruiter" else "/dashboard")
 
-@app.route("/resume-intelligence")
-def resume_intelligence():
-    return render_template('ai_modules/resume-intelligence.html')
-
-@app.route("/resources")
-def resources():
-    return render_template('public/resources.html')
-
-@app.route("/solutions")
-def solutions():
-    return render_template('public/solutions.html')
+@app.route("/<page>")
+def public_page(page):
+  pages = {
+    "platform": ("Platform", "AI-powered resume screening, ATS scoring, job matching, and candidate insights in one hiring workspace."),
+    "solutions": ("Solutions", "Recruiters can evaluate talent faster, while candidates can improve resumes, discover relevant roles, and track applications."),
+    "resources": ("Resources", "Explore practical guidance for resume writing, structured interviews, candidate evaluation, and better hiring decisions."),
+    "privacy": ("Privacy", "RecruitAI uses account and application data to provide its hiring tools. Access is limited to the features and workflows needed to operate the platform."),
+    "terms": ("Terms", "RecruitAI provides hiring and career preparation tools. Use the platform responsibly and review all AI-generated suggestions before making decisions."),
+    "api-status": ("API Status", "All RecruitAI services are operational."),
+  }
+  if page not in pages:
+    return render_template("public/landing_page_1.html") if page == "" else ("Page not found", 404)
+  title, description = pages[page]
+  return render_template_string("""
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} | RecruitAI</title>
+<style>body{margin:0;background:#101018;color:#f5f3ff;font:16px Arial,sans-serif}main{max-width:720px;margin:15vh auto;padding:32px}a{color:#c0c1ff}h1{font-size:42px;margin-bottom:16px}p{color:#c6c4d0;line-height:1.7}</style>
+</head><body><main><p><a href="/">RecruitAI</a></p><h1>{{ title }}</h1><p>{{ description }}</p><p><a href="/login">Get started</a></p></main></body></html>
+""", title=title, description=description)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -222,14 +309,26 @@ def login():
         role = request.form.get("role", "jobseeker")
         conn = get_db()
         user = conn.execute(
-            "SELECT * FROM users WHERE username=? AND password=? AND role=?",
-            (username, password, role)
+          "SELECT * FROM users WHERE username=? AND role=?",
+          (username, role)
         ).fetchone()
-        conn.close()
+        valid_password = False
+        legacy_password = False
         if user:
-            session["user"] = username
-            session["role"] = user["role"]
-            return redirect("/recruiter/dashboard" if user["role"] == "recruiter" else "/dashboard")
+          try:
+            valid_password = check_password_hash(user["password"], password)
+          except (TypeError, ValueError):
+            valid_password = user["password"] == password
+            legacy_password = valid_password
+        if valid_password:
+          if legacy_password:
+            conn.execute("UPDATE users SET password=? WHERE id=?", (generate_password_hash(password), user["id"]))
+            conn.commit()
+          conn.close()
+          session["user"] = username
+          session["role"] = user["role"]
+          return redirect("/recruiter/dashboard" if user["role"] == "recruiter" else "/dashboard")
+        conn.close()
         return render_template_string(LOGIN_HTML, error="Invalid credentials or wrong role selected")
     return render_template_string(LOGIN_HTML, error=None)
 
@@ -251,7 +350,7 @@ def register():
             company_name, company_size, industry, designation, created_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            username, password, role,
+          username, generate_password_hash(password), role,
             request.form.get("full_name"),
             request.form.get("email"),
             request.form.get("phone"),
@@ -298,6 +397,24 @@ def candidate_dashboard():
         shortlisted=shortlisted
     )
 
+    @app.route("/jobseeker/dashboard")
+    def jobseeker_dashboard_page():
+      if "user" not in session: return redirect("/login")
+      if session.get("role") == "recruiter": return redirect("/recruiter/dashboard")
+      return render_template("jobseeker/dashboard.html")
+
+    @app.route("/jobseeker/jobs")
+    def jobseeker_jobs_page():
+      if "user" not in session: return redirect("/login")
+      if session.get("role") == "recruiter": return redirect("/recruiter/dashboard")
+      return render_template("jobseeker/jobs.html")
+
+    @app.route("/jobseeker/my-applications")
+    def jobseeker_applications_page():
+      if "user" not in session: return redirect("/login")
+      if session.get("role") == "recruiter": return redirect("/recruiter/applications")
+      return render_template("jobseeker/my-applications.html")
+
 # RESUME BUILDER
 @app.route("/resume-builder")
 def resume_builder():
@@ -305,44 +422,7 @@ def resume_builder():
     if session.get("role") == "recruiter": return redirect("/recruiter/dashboard")
     return render_template("jobseeker/resume-builder.html")
 
-@app.route('/upload-photo', methods=['POST'])
-def upload_photo():
-    if 'photo' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-
-    file = request.files['photo']
-
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid file type. Use JPG, PNG, or WEBP'}), 400
-
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_filename = f"{uuid.uuid4().hex}.{ext}"
-
-    os.makedirs('static/uploads/profile_photos', exist_ok=True)
-    save_path = os.path.join('static/uploads/profile_photos', unique_filename)
-
-    old_photo = request.form.get('old_photo', '')
-    delete_old_photo(old_photo)
-
-    file.save(save_path)
-
-    try:
-        resize_image(save_path)
-    except Exception as e:
-        os.remove(save_path)
-        return jsonify({'error': f'Image processing failed: {str(e)}'}), 500
-
-    photo_url = f'/static/uploads/profile_photos/{unique_filename}'
-    return jsonify({'success': True, 'path': photo_url})
-
-
-@app.errorhandler(RequestEntityTooLarge)
-def file_too_large(e):
-    return jsonify({'error': 'File too large. Max size is 2 MB'}), 413
-
+# RECRUITER DASHBOARD
 @app.route("/recruiter/dashboard")
 def recruiter_dashboard():
     if "user" not in session: return redirect("/login")
@@ -554,17 +634,27 @@ def recruiter_screen_resume():
         file = request.files.get("resume_pdf")
         job_desc = request.form.get("job_description","")
         candidate_name = request.form.get("candidate_name","Unknown")
-        if file:
+        extension = file.filename.rsplit(".", 1)[-1].lower() if file and file.filename and "." in file.filename else ""
+        if not file or not file.filename:
+            result = {"error": "Please select a PDF resume to screen."}
+        elif extension != "pdf":
+            result = {"error": "Only PDF resumes are supported."}
+        elif file.content_length and file.content_length > MAX_RESUME_BYTES:
+            result = {"error": "Resume must be 5 MB or smaller."}
+        else:
             try:
-                pdf_bytes = file.read()
-                if PDF_EXTRACT_OK:
+                pdf_bytes = file.read(MAX_RESUME_BYTES + 1)
+                if len(pdf_bytes) > MAX_RESUME_BYTES:
+                    result = {"error": "Resume must be 5 MB or smaller."}
+                if PDF_EXTRACT_OK and not result:
                     from io import BytesIO as _BIO
                     resume_text = pdf_extract_text(_BIO(pdf_bytes))[:4000]
-                else:
+                elif not result:
                     resume_text = "(PDF extraction unavailable)"
             except Exception as e:
-                resume_text = f"(Error reading PDF: {e})"
-            prompt = f"""You are a senior ATS expert and recruiter. Analyse this resume.
+                result = {"error": f"Error reading PDF: {e}"}
+            if not result or not result.get("error"):
+              prompt = f"""You are a senior ATS expert and recruiter. Analyse this resume.
 RESUME TEXT: {resume_text}
 JOB DESCRIPTION: {job_desc if job_desc else "General software/tech role"}
 Respond ONLY with valid JSON (no markdown):
@@ -573,27 +663,73 @@ Respond ONLY with valid JSON (no markdown):
 "keyword_match":58,"skills_found":["Python","SQL"],"skills_missing":["Docker"],
 "sections_found":["Experience","Education","Skills"],"sections_missing":["Summary"],
 "recommendation":"Hire/Maybe/Pass"}}"""
-            result_raw = gemini(prompt)
-            try:
-                result_raw = result_raw.strip()
-                if "```" in result_raw:
-                    result_raw = result_raw.split("```")[1].replace("json","").strip()
-                result = json.loads(result_raw)
-                result["candidate_name"] = candidate_name
-                result["filename"] = file.filename
-                # store in screening history
-                conn = get_db()
-                conn.execute("""
-                    INSERT INTO screening_history (recruiter, candidate_name, filename, ats_score, result_json, screened_at)
-                    VALUES (?,?,?,?,?,?)
-                """, (session["user"], candidate_name, file.filename,
-                      result.get("ats_score",0), json.dumps(result), datetime.now().isoformat()))
-                conn.commit(); conn.close()
-            except Exception as e:
-                result = {"error": f"AI parsing failed: {e}", "candidate_name": candidate_name}
+              result_raw = gemini(prompt)
+              fallback = build_ats_feedback(resume_text, job_desc)
+              result = parse_ai_json(result_raw, fallback)
+              result.setdefault("strengths", fallback["strengths"])
+              result.setdefault("weaknesses", result.get("improvements", fallback["weaknesses"]))
+              result.setdefault("improvements", result["weaknesses"])
+              result["candidate_name"] = candidate_name
+              result["filename"] = file.filename
+              conn = get_db()
+              conn.execute("""
+              INSERT INTO screening_history (recruiter, candidate_name, filename, ats_score, result_json, screened_at)
+              VALUES (?,?,?,?,?,?)
+              """, (session["user"], candidate_name, file.filename,
+                result.get("ats_score", 0), json.dumps(result), datetime.now().isoformat()))
+              conn.commit(); conn.close()
     return render_template_string(SCREEN_RESUME_HTML, username=session["user"], result=result)
 
 # RECRUITER — ANALYTICS
+@app.route("/api/ai/chat", methods=["POST"])
+def ai_chat():
+  data = request.get_json(silent=True) or {}
+  message = (data.get("message") or "").strip()
+  if not message:
+    return jsonify({"error": "Please enter a message."}), 400
+  prompt = f"""You are RecruitAI's helpful, conversational recruiting assistant. Answer the user's actual question directly, briefly, and practically. Do not repeat a generic capability list unless the user asks what you can do.
+The developer and creator of RecruitAI is Jyoti Singh. If the user asks who developed, created, built, owns, or made this application, answer clearly: RecruitAI was developed by Jyoti Singh.
+User message: {message}
+RecruitAI serves recruiters and candidates. Recruiters can screen resumes, compare candidates, match skills to job requirements, and plan interviews. Candidates can build resumes, find relevant jobs, track applications, and use feedback to improve. Discuss these capabilities when relevant.
+Do not claim to have analyzed files that were not uploaded. Keep the answer under 80 words."""
+  response = gemini(prompt)
+  if response.startswith(("AI unavailable", "AI error")):
+    question = message.lower()
+    words = set(re.findall(r"\b[\w']+\b", question))
+    phrase = " ".join(question.split())
+    developer_terms = ("developer", "developed", "creator", "created", "built", "owner", "made")
+    creator_question = any(term in words for term in ("developed", "creator", "created", "built", "owner", "made")) or (
+      "developer" in words and ("who" in words or ("recruitai" in words and "of" in words)))
+    candidate_audience = any(term in words for term in ("candidate", "candidates", "jobseeker", "jobseekers", "applicant", "applicants"))
+    recruiter_audience = any(term in words for term in ("recruiter", "recruiters", "employer", "employers"))
+    if creator_question:
+      response = "RecruitAI was developed by Jyoti Singh."
+    elif candidate_audience or (recruiter_audience and "only" in words):
+      response = "RecruitAI supports both sides of hiring: recruiters can screen resumes, compare candidates, and plan interviews; candidates can build stronger resumes, find relevant jobs, track applications, and use feedback to improve their chances."
+    elif "yourself" in words or ("who" in words and "you" in words):
+      response = "I’m RecruitAI’s hiring assistant. I help recruiters and candidates with resume improvement, ATS screening, job matching, candidate evaluation, interview planning, and practical hiring guidance."
+    elif ("best" in words and any(term in words for term in ("part", "feature", "thing"))) or "advantage" in words:
+      response = "RecruitAI’s strongest feature is connecting resume analysis with the hiring workflow: it helps recruiters compare candidates against role requirements while giving candidates practical feedback to improve their resumes and applications."
+    elif any(term in words for term in ("serve", "purpose", "useful", "helpful", "benefit")):
+      response = "RecruitAI helps recruiters screen resumes, compare candidates, match skills to job requirements, prepare interviews, and make faster, more consistent hiring decisions."
+    elif any(term in words for term in ("hello", "hi", "hey")):
+      response = "Hello. I can help with ATS screening, resume strengths and weaknesses, job descriptions, candidate evaluation, and interview planning."
+    elif any(term in words for term in ("analyze", "analyse", "analyzing", "analysing", "review", "reviewing")) and any(term in words for term in ("resume", "resumes", "cv")):
+      response = "Upload the resumes and the Senior React job description. RecruitAI can compare candidates on React experience, technical skills, relevant achievements, and job-description keywords, then return ATS scores and a shortlist."
+    elif any(term in words for term in ("ats", "score", "screen", "screening", "resume", "resumes", "cv")):
+      response = "RecruitAI checks resume sections, relevant skills, measurable achievements, and job-description keywords to produce an ATS score and hiring recommendation."
+    elif any(term in words for term in ("strength", "strengths", "weakness", "weaknesses", "improvement", "improve")):
+      response = "Strengths are evidence-backed skills, experience, and keywords found in the resume. Weaknesses are missing sections, vague achievements, and gaps against the job description."
+    elif any(term in words for term in ("interview", "interviews", "question", "questions", "hire", "hiring", "candidate", "candidates")):
+      response = "For a fair interview, combine role-specific technical questions with behavioural and situational questions, then assess answers against the same criteria for every candidate."
+    elif any(term in words for term in ("role", "roles", "requirement", "requirements")) or phrase in ("job description", "job post"):
+      response = "A strong job description includes the role outcome, essential skills, responsibilities, experience level, location, and clear success measures."
+    elif any(term in words for term in ("thanks", "thank", "bye", "goodbye")):
+      response = "You’re welcome. I’m here whenever you need help with hiring or career preparation."
+    else:
+      response = "I’m here to help with your hiring or career question. Tell me what you’re trying to accomplish, and I’ll suggest the most useful next step."
+  return jsonify({"reply": response.strip()})
+
 @app.route("/recruiter/analytics")
 def recruiter_analytics():
     if "user" not in session or session.get("role") != "recruiter":
@@ -741,6 +877,78 @@ Keep it practical and actionable. Return as plain text, no JSON."""
     result = gemini(prompt)
     return jsonify({"roadmap": result})
 
+if True:
+  def fetch_live_jobs(query=""):
+    """Read current vacancies from public feeds and retain their original apply URLs."""
+    jobs = []
+    adzuna_id = os.getenv("ADZUNA_APP_ID")
+    adzuna_key = os.getenv("ADZUNA_APP_KEY")
+    if adzuna_id and adzuna_key:
+      try:
+        response = requests.get(
+          "https://api.adzuna.com/v1/api/jobs/in/search/1",
+          params={"app_id": adzuna_id, "app_key": adzuna_key, "results_per_page": 40,
+              "what": query or "software developer", "content-type": "application/json"},
+          timeout=8
+        )
+        response.raise_for_status()
+        for item in response.json().get("results", []):
+          jobs.append({
+            "id": f"adzuna-{item.get('id')}",
+            "title": item.get("title", ""),
+            "company": (item.get("company") or {}).get("display_name", ""),
+            "location": (item.get("location") or {}).get("display_name", "India"),
+            "job_type": "Full-time",
+            "description": re.sub(r"\s+", " ", html_lib.unescape(item.get("description") or "")).strip(),
+            "skills_required": "",
+            "salary": f"INR {item.get('salary_min'):,.0f} - {item.get('salary_max'):,.0f}" if item.get("salary_min") and item.get("salary_max") else "",
+            "posted_at": item.get("created", ""),
+            "source_url": item.get("redirect_url", ""),
+            "source_name": "Adzuna India",
+            "active": 1,
+          })
+      except (requests.RequestException, ValueError, TypeError, KeyError):
+        pass
+    sources = [
+      ("https://www.arbeitnow.com/api/job-board-api", "data"),
+      ("https://remotive.com/api/remote-jobs", "jobs"),
+    ]
+    for endpoint, key in sources:
+      try:
+        params = {"search": query} if query else {}
+        response = requests.get(endpoint, params=params, timeout=8)
+        response.raise_for_status()
+        payload = response.json()
+        for item in payload.get(key, []):
+          title = item.get("title") or ""
+          company = item.get("company_name") or item.get("company_name") or item.get("company") or ""
+          location = item.get("location") or item.get("candidate_required_location") or "Remote"
+          raw_description = item.get("description") or ""
+          description = html_lib.unescape(html_lib.unescape(raw_description))
+          description = re.sub(r"<[^>]+>", " ", description)
+          searchable = f"{title} {company} {location} {' '.join(item.get('tags') or [])}".lower()
+          if query and query.lower() not in searchable:
+            continue
+          jobs.append({
+            "id": f"live-{endpoint}-{item.get('slug') or item.get('id')}",
+            "title": title, "company": company, "location": location,
+            "job_type": (item.get("job_types") or ["Full-time"])[0] if isinstance(item.get("job_types"), list) else item.get("job_type", "Full-time"),
+            "description": re.sub(r"\s+", " ", description).strip(),
+            "skills_required": ", ".join(item.get("tags") or []),
+            "salary": item.get("salary") or "",
+            "posted_at": datetime.fromtimestamp(item.get("created_at", 0)).isoformat() if item.get("created_at") else item.get("publication_date", ""),
+            "source_url": item.get("url") or item.get("url") or "",
+            "source_name": "Arbeitnow" if "arbeitnow" in endpoint else "Remotive",
+            "active": 1,
+          })
+      except (requests.RequestException, ValueError, TypeError, KeyError):
+        continue
+    unique = {}
+    for job in jobs:
+      if job["source_url"]:
+        unique[job["source_url"]] = job
+    return list(unique.values())
+
 @app.route("/jobs")
 def job_board():
     if "user" not in session: return redirect("/login")
@@ -753,8 +961,223 @@ def job_board():
         ).fetchall()
     else:
         jobs = conn.execute("SELECT * FROM jobs WHERE active=1 ORDER BY id DESC").fetchall()
+    live_jobs = fetch_live_jobs(query)[:40]
+    profile = conn.execute("SELECT * FROM users WHERE username=?", (session["user"],)).fetchone()
+    draft = conn.execute("SELECT draft_json FROM resume_drafts WHERE username=?", (session["user"],)).fetchone()
+    try:
+      resume = json.loads(draft["draft_json"] or "{}") if draft else {}
+    except (TypeError, ValueError):
+      resume = {}
+    jobs = [_personalize_job(dict(job), dict(profile) if profile else {}, resume) for job in jobs]
+    jobs.extend([_personalize_job(job, dict(profile) if profile else {}, resume) for job in live_jobs])
+    jobs.sort(key=lambda job: (job["match_percent"], job.get("id", 0)), reverse=True)
+    recommendation_query = bool(query and not jobs)
+    if recommendation_query:
+      jobs = [_personalize_job(job, dict(profile) if profile else {}, resume) for job in fetch_live_jobs()[:12]]
+      jobs.sort(key=lambda job: (job["match_percent"], job.get("posted_at", "")), reverse=True)
     conn.close()
-    return render_template_string(JOB_BOARD_HTML, jobs=jobs, query=query)
+    return render_template_string(JOB_BOARD_HTML, jobs=jobs, query=query, recommendation_query=recommendation_query)
+
+if True:
+  # ── CANDIDATE / RECRUITER JSON API ───────────────────────────
+  def _job_json(row, applicant_count=0):
+    job = dict(row)
+    skills = job.get("skills_required") or ""
+    job["skills_list"] = [item.strip() for item in skills.split(",") if item.strip()]
+    job["is_active"] = bool(job.get("active", 1))
+    job["applicant_count"] = applicant_count
+    return job
+
+  def _personalize_job(job, profile, resume):
+    profile_text = " ".join(str(profile.get(key) or "") for key in ("job_title", "city", "state"))
+    resume_text = json.dumps(resume or {})
+    candidate_text = f"{profile_text} {resume_text}".lower()
+    job_text = " ".join(str(job.get(key) or "") for key in ("title", "description", "skills_required", "location")).lower()
+    job_skills = [skill.strip() for skill in (job.get("skills_required") or "").split(",") if skill.strip()]
+    matched_skills = [skill for skill in job_skills if re.search(rf"\b{re.escape(skill.lower())}\b", candidate_text)]
+    location = f"{profile.get('city') or ''} {profile.get('state') or ''}".lower().strip()
+    location_match = bool(location and location in job_text) or "remote" in job_text
+    title_words = [word for word in re.findall(r"[a-z]+", str(profile.get("job_title") or "").lower()) if len(word) > 2]
+    title_match = bool(title_words and any(word in job_text for word in title_words))
+    score = min(99, 35 + len(matched_skills) * 10 + (15 if location_match else 0) + (15 if title_match else 0))
+    job["match_percent"] = score
+    job["matched_skills"] = matched_skills
+    job["match_reasons"] = (["Location or remote preference"] if location_match else []) + (["Matches your target role"] if title_match else [])
+    if matched_skills:
+      job["match_reasons"].append(f"Matches {len(matched_skills)} saved skill{'s' if len(matched_skills) != 1 else ''}")
+    return job
+
+  @app.route("/api/me")
+  def api_me():
+    if "user" not in session:
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    user = conn.execute(
+      "SELECT username, full_name, email, role, job_title, city, state FROM users WHERE username=?",
+      (session["user"],)
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(user) if user else {"username": session["user"], "role": session.get("role")})
+
+  @app.route("/api/jobs")
+  def api_jobs():
+    if "user" not in session:
+      return jsonify({"error": "Unauthorized"}), 401
+    query = request.args.get("q", "").strip()
+    job_type = request.args.get("type", "").strip()
+    filters = ["active=1"]
+    values = []
+    if query:
+      filters.append("(title LIKE ? OR company LIKE ? OR location LIKE ? OR skills_required LIKE ?)")
+      values.extend([f"%{query}%"] * 4)
+    if job_type:
+      filters.append("job_type=?")
+      values.append(job_type)
+    conn = get_db()
+    profile = conn.execute("SELECT * FROM users WHERE username=?", (session["user"],)).fetchone()
+    draft_row = conn.execute("SELECT draft_json FROM resume_drafts WHERE username=?", (session["user"],)).fetchone()
+    try:
+      resume = json.loads(draft_row["draft_json"] or "{}") if draft_row else {}
+    except (TypeError, ValueError):
+      resume = {}
+    rows = conn.execute(
+      f"SELECT * FROM jobs WHERE {' AND '.join(filters)} ORDER BY id DESC", values
+    ).fetchall()
+    result = []
+    for row in rows:
+      count = conn.execute("SELECT COUNT(*) AS c FROM applications WHERE job_id=?", (row["id"],)).fetchone()["c"]
+      job = _job_json(row, count)
+      result.append(_personalize_job(job, dict(profile) if profile else {}, resume))
+    result.sort(key=lambda job: (job["match_percent"], job.get("id", 0)), reverse=True)
+    conn.close()
+    return jsonify(result)
+
+  @app.route("/api/my-applications")
+  def api_my_applications():
+    if "user" not in session:
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    rows = conn.execute("""
+      SELECT a.*, j.location, j.job_type, j.salary
+      FROM applications a LEFT JOIN jobs j ON a.job_id=j.id
+      WHERE a.username=? ORDER BY a.id DESC
+    """, (session["user"],)).fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+      item = dict(row)
+      item["created_at"] = item.get("applied_at")
+      item["status"] = (item.get("status") or "Applied").lower()
+      try:
+        resume = json.loads(item.get("resume_json") or "{}")
+      except (TypeError, ValueError):
+        resume = {}
+      item["ats_score"] = resume.get("ats_score", resume.get("score", 0))
+      item["cover_note"] = resume.get("cover_note", "")
+      item["portfolio_url"] = resume.get("portfolio_url", "")
+      item.pop("resume_json", None)
+      result.append(item)
+    return jsonify(result)
+
+  @app.route("/api/notifications")
+  def api_notifications():
+    if "user" not in session:
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    rows = conn.execute(
+      "SELECT * FROM notifications WHERE user=? ORDER BY id DESC LIMIT 30", (session["user"],)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
+
+  @app.route("/api/notifications/read", methods=["POST"])
+  def api_notifications_read():
+    if "user" not in session:
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    conn.execute("UPDATE notifications SET is_read=1 WHERE user=?", (session["user"],))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+  @app.route("/api/jobs/<int:job_id>/apply", methods=["POST"])
+  def api_apply_to_job(job_id):
+    if "user" not in session or session.get("role") == "recruiter":
+      return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    job = conn.execute("SELECT * FROM jobs WHERE id=? AND active=1", (job_id,)).fetchone()
+    if not job:
+      conn.close()
+      return jsonify({"error": "Job not found"}), 404
+    existing = conn.execute(
+      "SELECT id FROM applications WHERE username=? AND job_id=?", (session["user"], job_id)
+    ).fetchone()
+    if existing:
+      conn.close()
+      return jsonify({"error": "Already applied"}), 409
+    draft = conn.execute("SELECT draft_json FROM resume_drafts WHERE username=?", (session["user"],)).fetchone()
+    resume = json.loads(draft["draft_json"] or "{}") if draft else {}
+    resume.update({"cover_note": data.get("cover_note", ""), "portfolio_url": data.get("portfolio_url", "")})
+    conn.execute("""
+      INSERT INTO applications (username, job_id, job_title, company, applied_at, resume_json)
+      VALUES (?,?,?,?,?,?)
+    """, (session["user"], job_id, job["title"], job["company"], datetime.now().isoformat(), json.dumps(resume)))
+    conn.commit(); conn.close()
+    push_notification(job["recruiter"], "application", f"New application from {session['user']} for '{job['title']}'", "/recruiter/applications")
+    return jsonify({"success": True})
+
+  @app.route("/api/jobs/post", methods=["POST"])
+  def api_post_job():
+    if "user" not in session or session.get("role") != "recruiter":
+      return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    if not title or not description:
+      return jsonify({"error": "Title and description are required"}), 400
+    skills = data.get("skills") or data.get("skills_required") or []
+    if isinstance(skills, list):
+      skills = ", ".join(str(skill).strip() for skill in skills if str(skill).strip())
+    conn = get_db()
+    cursor = conn.execute("""
+      INSERT INTO jobs (recruiter, title, company, location, job_type, description, skills_required, salary, posted_at)
+      VALUES (?,?,?,?,?,?,?,?,?)
+    """, (session["user"], title, (data.get("company") or "").strip(), (data.get("location") or "").strip(),
+        data.get("job_type", "Full-time"), description, skills, (data.get("salary") or "").strip(), datetime.now().isoformat()))
+    conn.commit(); job_id = cursor.lastrowid
+    candidates = conn.execute("SELECT username FROM users WHERE role='jobseeker'").fetchall()
+    conn.close()
+    for candidate in candidates:
+      push_notification(candidate["username"], "job", f"New job posted: {title}", "/jobseeker/jobs")
+    return jsonify({"success": True, "job_id": job_id})
+
+  @app.route("/api/jobs/mine")
+  def api_my_jobs():
+    if "user" not in session or session.get("role") != "recruiter":
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM jobs WHERE recruiter=? ORDER BY id DESC", (session["user"],)).fetchall()
+    result = [_job_json(row, conn.execute("SELECT COUNT(*) AS c FROM applications WHERE job_id=?", (row["id"],)).fetchone()["c"]) for row in rows]
+    conn.close()
+    return jsonify(result)
+
+  @app.route("/api/jobs/<int:job_id>/toggle", methods=["POST"])
+  def api_toggle_job(job_id):
+    if "user" not in session or session.get("role") != "recruiter":
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    result = conn.execute("UPDATE jobs SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=? AND recruiter=?", (job_id, session["user"]))
+    conn.commit(); conn.close()
+    return jsonify({"success": result.rowcount == 1})
+
+  @app.route("/api/jobs/<int:job_id>/delete", methods=["POST"])
+  def api_delete_job(job_id):
+    if "user" not in session or session.get("role") != "recruiter":
+      return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    result = conn.execute("DELETE FROM jobs WHERE id=? AND recruiter=?", (job_id, session["user"]))
+    conn.commit(); conn.close()
+    return jsonify({"success": result.rowcount == 1})
 
 # APPLY
 @app.route("/api/jobs/apply", methods=["POST"])
@@ -840,21 +1263,15 @@ JOB DESCRIPTION: {job_desc if job_desc else "General software engineering role"}
 Respond ONLY with valid JSON (no extra text):
 {{"score": 78, "grade": "B+", "strengths": ["Clear work experience", "Relevant skills listed"], "improvements": ["Add more keywords", "Quantify achievements"], "keyword_match": 65}}"""
     result = gemini(prompt)
-    try:
-        result = result.strip()
-        if "```" in result:
-            result = result.split("```")[1].replace("json","").strip()
-        parsed = json.loads(result)
-        conn = get_db()
-        conn.execute("""
-            INSERT INTO resume_analytics (username, ats_score) VALUES (?,?)
-            ON CONFLICT(username) DO UPDATE SET ats_score=excluded.ats_score
-        """, (session["user"], parsed.get("score", 0)))
-        conn.commit()
-        conn.close()
-        return jsonify(parsed)
-    except:
-        return jsonify({"score": 60, "grade": "C+", "strengths": ["Resume submitted"], "improvements": ["Add more detail"], "keyword_match": 50})
+    parsed = parse_ai_json(result, build_ats_feedback(resume_text, job_desc))
+    conn = get_db()
+    conn.execute("""
+      INSERT INTO resume_analytics (username, ats_score) VALUES (?,?)
+      ON CONFLICT(username) DO UPDATE SET ats_score=excluded.ats_score
+    """, (session["user"], parsed.get("score", parsed.get("ats_score", 0))))
+    conn.commit()
+    conn.close()
+    return jsonify(parsed)
 
 @app.route("/api/ai/job-match", methods=["POST"])
 def ai_job_match():
@@ -881,7 +1298,17 @@ Respond ONLY with valid JSON (no extra text):
             result = result.split("```")[1].replace("json","").strip()
         return jsonify(json.loads(result))
     except:
-        return jsonify({"match_percent": 70, "matched_skills": [], "missing_skills": [], "recommendation": "Good fit"})
+      resume_text = json.dumps(resume_data)
+      required_skills = [skill.strip() for skill in (job["skills_required"] or "").split(",") if skill.strip()]
+      matched_skills = [skill for skill in required_skills if re.search(rf"\b{re.escape(skill.lower())}\b", resume_text.lower())]
+      missing_skills = [skill for skill in required_skills if skill not in matched_skills]
+      match_percent = round((len(matched_skills) / len(required_skills)) * 100) if required_skills else 50
+      return jsonify({
+        "match_percent": match_percent,
+        "matched_skills": matched_skills,
+        "missing_skills": missing_skills,
+        "recommendation": "Strong fit" if match_percent >= 70 else "Build these skills before applying"
+      })
 
 # RESUME SAVE/LOAD/DOWNLOAD
 @app.route("/api/resume-builder/save", methods=["POST"])
@@ -912,23 +1339,10 @@ def load_resume_draft():
 def download_resume_pdf():
     if "user" not in session: return jsonify({"error": "Not logged in"}), 401
     data = request.get_json()
-    if 'edu' in data and 'education' not in data:
-        data['education'] = [{'degree': e.get('degree',''), 'college': e.get('institution', e.get('college','')), 'from': e.get('start',''), 'to': e.get('end','')} for e in data['edu']]
-    if 'exp' in data and 'experiences' not in data:
-        data['experiences'] = data['exp']
-    if 'skill' in data and 'skills' not in data:
-        data['skills'] = [s.get('name','') if isinstance(s, dict) else s for s in data['skill']]
-    if 'proj' in data and 'projects' not in data:
-        data['projects'] = [{'name': p.get('title', p.get('name','')), 'tech': p.get('tech',''), 'desc': p.get('desc','')} for p in data['proj']]
-    if 'lang' in data and 'languages' not in data:
-        data['languages'] = [l.get('name','') if isinstance(l, dict) else l for l in data['lang']]
-    if 'cert' in data and 'certifications' not in data:
-        data['certifications'] = [c.get('title','') if isinstance(c, dict) else c for c in data['cert']]
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     y = height - 50
-    margin_l, margin_r = 50, width - 50
 
     def nl(amount=15):
         nonlocal y
@@ -937,131 +1351,240 @@ def download_resume_pdf():
             p.showPage()
             y = height - 50
 
-    def draw_wrapped(text, x, max_width, font="Helvetica", size=11, line_height=14):
-        p.setFont(font, size)
-        words = str(text).split()
-        line = ""
-        for word in words:
-            test = line + (" " if line else "") + word
-            if p.stringWidth(test, font, size) <= max_width:
-                line = test
-            else:
-                p.drawString(x, y, line)
-                nl(line_height)
-                line = word
-        if line:
-            p.drawString(x, y, line)
-            nl(line_height)
-
-    def section_header(title):
-        nl(6)
-        p.setFont("Helvetica-Bold", 11)
-        p.setFillColorRGB(0.49, 0.36, 0.96)
-        p.drawString(margin_l, y, title.upper())
-        p.setFillColorRGB(0, 0, 0)
-        nl(4)
-        p.setStrokeColorRGB(0.49, 0.36, 0.96)
-        p.setLineWidth(0.5)
-        p.line(margin_l, y, margin_r, y)
-        nl(12)
-
-    # Header
-    p.setFont("Helvetica-Bold", 22)
-    p.drawString(margin_l, y, data.get("name", "Your Name"))
+    p.setFont("Helvetica-Bold", 24)
+    p.drawString(50, y, data.get("name", "Your Name"))
+    nl(25)
+    p.setFont("Helvetica", 14)
+    p.drawString(50, y, data.get("headline", ""))
     nl(22)
-    if data.get("headline"):
-        p.setFont("Helvetica", 13)
-        p.setFillColorRGB(0.3, 0.3, 0.3)
-        p.drawString(margin_l, y, data["headline"])
-        p.setFillColorRGB(0, 0, 0)
-        nl(16)
-    contact = "  |  ".join(filter(None, [data.get("email",""), data.get("phone",""), data.get("location","")]))
-    if contact:
-        p.setFont("Helvetica", 10)
-        p.setFillColorRGB(0.4, 0.4, 0.4)
-        p.drawString(margin_l, y, contact)
-        p.setFillColorRGB(0, 0, 0)
-        nl(14)
+    p.setFont("Helvetica", 11)
+    p.drawString(50, y, f"{data.get('email','')}  |  {data.get('phone','')}  |  {data.get('location','')}")
+    nl(20)
     p.setStrokeColorRGB(0.48, 0.36, 0.96)
     p.setLineWidth(1.5)
-    p.line(margin_l, y, margin_r, y)
-    nl(14)
+    p.line(50, y, width-50, y)
+    nl(18)
+
+    def section_header(title):
+        nonlocal y
+        p.setFont("Helvetica-Bold", 13)
+        p.setFillColorRGB(0.49, 0.36, 0.96)
+        p.drawString(50, y, title)
+        p.setFillColorRGB(0, 0, 0)
+        nl(16)
 
     if data.get("summary"):
-        section_header("Summary")
-        draw_wrapped(data["summary"], margin_l, margin_r - margin_l, size=10, line_height=13)
-        nl(4)
-
-    if data.get("skills"):
-        section_header("Skills")
-        p.setFont("Helvetica", 10)
-        skills_line = "  •  ".join(data["skills"])
-        draw_wrapped(skills_line, margin_l, margin_r - margin_l, size=10, line_height=13)
-        nl(4)
+        section_header("SUMMARY")
+        p.setFont("Helvetica", 11)
+        for line in data["summary"].split("\n"):
+            p.drawString(50, y, line); nl()
+        nl(8)
 
     if data.get("experiences"):
-        section_header("Experience")
+        section_header("EXPERIENCE")
         for exp in data["experiences"]:
-            p.setFont("Helvetica-Bold", 11)
-            p.drawString(margin_l, y, exp.get("title", ""))
-            nl(13)
-            p.setFont("Helvetica", 10)
-            p.setFillColorRGB(0.4, 0.4, 0.4)
-            sub = f"{exp.get('company','')}  |  {exp.get('start','')} – {exp.get('end','Present')}"
-            p.drawString(margin_l, y, sub)
-            p.setFillColorRGB(0, 0, 0)
-            nl(12)
-            if exp.get("desc"):
-                draw_wrapped(exp["desc"], margin_l + 8, margin_r - margin_l - 8, size=10, line_height=13)
-            nl(6)
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, exp.get("title", "")); nl(14)
+            p.setFont("Helvetica", 11)
+            p.drawString(50, y, f"{exp.get('company','')}  |  {exp.get('start','')} – {exp.get('end','Present')}"); nl(13)
+            for line in exp.get("desc","").split("\n"):
+                p.drawString(60, y, line); nl()
+            nl(8)
 
     if data.get("education"):
-        section_header("Education")
+        section_header("EDUCATION")
         for edu in data["education"]:
-            p.setFont("Helvetica-Bold", 11)
-            p.drawString(margin_l, y, edu.get("degree", ""))
-            nl(13)
-            p.setFont("Helvetica", 10)
-            p.setFillColorRGB(0.4, 0.4, 0.4)
-            sub = f"{edu.get('college','')}  |  {edu.get('from','')} – {edu.get('to','')}"
-            p.drawString(margin_l, y, sub.strip(" |– "))
-            p.setFillColorRGB(0, 0, 0)
-            nl(16)
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, edu.get("degree","")); nl(14)
+            p.setFont("Helvetica", 11)
+            p.drawString(50, y, f"{edu.get('college','')}  |  {edu.get('from','')} – {edu.get('to','')}"); nl(20)
 
     if data.get("projects"):
-        section_header("Projects")
+        section_header("PROJECTS")
         for proj in data["projects"]:
-            p.setFont("Helvetica-Bold", 11)
-            p.drawString(margin_l, y, proj.get("name", proj.get("title", "")))
-            nl(13)
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, proj.get("name", proj.get("title",""))); nl(14)
             if proj.get("tech"):
                 p.setFont("Helvetica-Oblique", 10)
-                p.setFillColorRGB(0.4, 0.4, 0.4)
-                p.drawString(margin_l, y, proj["tech"])
-                p.setFillColorRGB(0, 0, 0)
-                nl(12)
-            if proj.get("desc"):
-                draw_wrapped(proj["desc"], margin_l + 8, margin_r - margin_l - 8, size=10, line_height=13)
-            nl(6)
+                p.drawString(50, y, proj["tech"]); nl(13)
+            p.setFont("Helvetica", 11)
+            for line in proj.get("desc","").split("\n"):
+                p.drawString(60, y, line); nl()
+            nl(8)
 
-    if data.get("certifications"):
-        section_header("Certifications")
-        for c in data["certifications"]:
-            p.setFont("Helvetica", 10)
-            p.drawString(margin_l, y, f"• {c}")
-            nl(13)
+    if data.get("skills"):
+        section_header("SKILLS")
+        p.setFont("Helvetica", 11)
+        p.drawString(50, y, ", ".join(data["skills"])); nl(20)
 
     if data.get("languages"):
-        section_header("Languages")
-        p.setFont("Helvetica", 10)
-        p.drawString(margin_l, y, "  •  ".join(data["languages"]))
-        nl(13)
+        section_header("LANGUAGES")
+        p.setFont("Helvetica", 11)
+        p.drawString(50, y, ", ".join(data["languages"])); nl(20)
+
+    if data.get("certifications"):
+        section_header("CERTIFICATIONS")
+        p.setFont("Helvetica", 11)
+        for cert in data["certifications"]:
+            p.drawString(50, y, f"• {cert}"); nl()
+
+    if data.get("extraCurricular"):
+        section_header("EXTRA CURRICULAR")
+        for ec in data["extraCurricular"]:
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, f"{ec.get('title','')}  [{ec.get('type','')}]"); nl(14)
+            p.setFont("Helvetica", 11)
+            p.drawString(50, y, f"{ec.get('org','')}  {ec.get('year','')}"); nl(13)
+            if ec.get("desc"):
+                for line in ec["desc"].split("\n"):
+                    p.drawString(60, y, line); nl()
+            nl(6)
+
+    links = []
+    if data.get("github"):    links.append(f"GitHub: {data['github']}")
+    if data.get("linkedin"):  links.append(f"LinkedIn: {data['linkedin']}")
+    if data.get("portfolio"): links.append(f"Portfolio: {data['portfolio']}")
+    if data.get("twitter"):   links.append(f"Twitter: {data['twitter']}")
+    if links:
+        section_header("LINKS")
+        p.setFont("Helvetica", 11)
+        for link in links:
+            p.drawString(50, y, link); nl()
 
     p.save()
     buffer.seek(0)
-    name_slug = data.get("name", "resume").replace(" ", "_")
-    return send_file(buffer, as_attachment=True, download_name=f"{name_slug}_resume.pdf", mimetype="application/pdf")
-  
+    
+    buffer.seek(0)
+    _track_download(session["user"])
+    return send_file(buffer, as_attachment=True, download_name="resume.pdf", mimetype="application/pdf")
+
+@app.route("/api/resume-builder/download-docx", methods=["POST"])
+def download_resume_docx():
+    if "user" not in session:
+      return jsonify({"error": "Not logged in"}), 401
+    if not DOCX_EXPORT_OK:
+      return jsonify({"error": "DOCX export is unavailable. Install python-docx first."}), 500
+
+    data = request.get_json() or {}
+    document = Document()
+    section = document.sections[0]
+    section.top_margin = Inches(0.55)
+    section.bottom_margin = Inches(0.55)
+    section.left_margin = Inches(0.65)
+    section.right_margin = Inches(0.65)
+    normal = document.styles["Normal"]
+    normal.font.name = "Georgia"
+    normal.font.size = Pt(9.5)
+
+    heading = data.get("documentHeading", "Resume")
+    title = document.add_paragraph()
+    title.alignment = 1
+    title_run = title.add_run(heading)
+    title_run.bold = True
+    title_run.font.name = "Georgia"
+    title_run.font.size = Pt(11)
+    name = document.add_paragraph()
+    name_run = name.add_run(data.get("name", "Your Name"))
+    name_run.bold = True
+    name_run.font.name = "Georgia"
+    name_run.font.size = Pt(12)
+    if data.get("headline"):
+      headline = document.add_paragraph(data["headline"])
+      for run in headline.runs:
+        run.font.name = "Georgia"
+        run.font.size = Pt(12)
+    contact = " | ".join(filter(None, [data.get("email"), data.get("phone"), data.get("currentAddress") or data.get("location")]))
+    if contact:
+      contact_paragraph = document.add_paragraph(contact)
+      for run in contact_paragraph.runs:
+        run.font.name = "Georgia"
+        run.font.size = Pt(9.5)
+    for label, key in (("Github-", "github"), ("Linkedin-", "linkedin")):
+      if data.get(key):
+        link_paragraph = document.add_paragraph()
+        label_run = link_paragraph.add_run(f"{label}  ")
+        label_run.bold = True
+        link_paragraph.add_run(data[key])
+        for run in link_paragraph.runs:
+          run.font.name = "Georgia"
+          run.font.size = Pt(9)
+    for label, key in (("Permanent Address", "permanentAddress"), ("Date of Birth", "dob"), ("Parent's Name", "parentsName")):
+      if data.get(key):
+        document.add_paragraph(f"{label}: {data[key]}")
+
+    def add_section(title):
+      paragraph = document.add_paragraph()
+      run = paragraph.add_run(title)
+      run.bold = True
+      run.font.name = "Georgia"
+      run.font.size = Pt(10.5)
+
+    def add_bold_entry(text):
+      paragraph = document.add_paragraph()
+      run = paragraph.add_run(text)
+      run.bold = True
+      run.font.name = "Georgia"
+      run.font.size = Pt(10.5)
+      return paragraph
+
+    if data.get("summary"):
+      add_section("SUMMARY")
+      document.add_paragraph(data["summary"])
+    category_order = ["Programming Languages", "AI", "Libraries & Tools", "Web & Database", "Soft Skills", "Other Skills"]
+    categories = data.get("skillCategories") or {"Programming Languages": data.get("skills", [])}
+    if any(categories.values()):
+      add_section("SKILLS")
+      ordered_categories = category_order + [category for category in categories if category not in category_order]
+      for category in ordered_categories:
+        skills = categories.get(category, [])
+        if skills:
+          paragraph = document.add_paragraph()
+          paragraph.add_run(f"{category}: ").bold = True
+          paragraph.add_run(", ".join(skills))
+    if data.get("experience") or data.get("experiences"):
+      add_section("EXPERIENCE")
+      for experience in data.get("experience", data.get("experiences", [])):
+        add_bold_entry(experience.get("title", ""))
+        document.add_paragraph(" | ".join(filter(None, [experience.get("company"), experience.get("start"), experience.get("end")])))
+        for line in re.split(r"\r?\n", experience.get("desc", "")):
+          if line.strip():
+            document.add_paragraph(re.sub(r"^[\s•▪◦�\uf0b7\-*]+", "", line).strip(), style="List Bullet")
+    if data.get("education"):
+      add_section("EDUCATION")
+      for education in data["education"]:
+        institution = education.get("schoolCollegeUniversity") or education.get("college", "")
+        details = " | ".join(filter(None, [institution, education.get("year"), education.get("percent")]))
+        add_bold_entry(education.get("degree", ""))
+        if details:
+          document.add_paragraph(details)
+    if data.get("projects"):
+      add_section("PROJECTS")
+      for project in data["projects"]:
+        add_bold_entry(project.get("name", ""))
+        if project.get("tech"):
+          document.add_paragraph(project["tech"])
+        for line in re.split(r"\r?\n", project.get("desc", "")):
+          if line.strip():
+            document.add_paragraph(re.sub(r"^[\s•▪◦�\uf0b7\-*]+", "", line).strip(), style="List Bullet")
+    if data.get("languages"):
+      add_section("LANGUAGES")
+      document.add_paragraph(", ".join(data["languages"]))
+    if data.get("certifications"):
+      add_section("CERTIFICATIONS")
+      for certification in data["certifications"]:
+        document.add_paragraph(certification, style="List Bullet")
+    if data.get("declaration") or data.get("signature") or data.get("declarationDate"):
+      add_section("DECLARATION")
+      if data.get("declaration"):
+        document.add_paragraph(data["declaration"])
+      document.add_paragraph(f"Date: {data.get('declarationDate', '')}\n{data.get('signature', '')}\nSignature")
+
+    buffer = BytesIO()
+    document.save(buffer)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="resume.docx",
+             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
 def _track_download(username):
     try:
         conn = get_db()
@@ -1088,8 +1611,15 @@ def ai_ats_score_upload():
     job_desc = request.form.get("job_description", "")
     if not file:
         return jsonify({"error": "No file uploaded"}), 400
+    extension = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
+    if extension != "pdf":
+      return jsonify({"error": "Only PDF resumes are supported"}), 400
+    if file.content_length and file.content_length > MAX_RESUME_BYTES:
+      return jsonify({"error": "Resume must be 5 MB or smaller"}), 413
     try:
-        pdf_bytes = file.read()
+      pdf_bytes = file.read(MAX_RESUME_BYTES + 1)
+      if len(pdf_bytes) > MAX_RESUME_BYTES:
+        return jsonify({"error": "Resume must be 5 MB or smaller"}), 413
         if PDF_EXTRACT_OK:
             from io import BytesIO as _BIO
             resume_text = pdf_extract_text(_BIO(pdf_bytes))
@@ -1118,30 +1648,77 @@ Respond ONLY with a valid JSON object (no extra text, no markdown):
   "sections_missing": ["Summary", "Certifications"]
 }}"""
     result = gemini(prompt)
+    parsed = parse_ai_json(result, build_ats_feedback(resume_text, job_desc))
+    conn = get_db()
+    conn.execute("""
+      INSERT INTO resume_analytics (username, ats_score) VALUES (?,?)
+      ON CONFLICT(username) DO UPDATE SET ats_score=excluded.ats_score
+    """, (session["user"], parsed.get("score", parsed.get("ats_score", 0))))
+    conn.commit()
+    conn.close()
+    return jsonify(parsed)
+
+@app.route("/api/resume-builder/import", methods=["POST"])
+def import_resume_for_builder():
+    """Extract a PDF/DOCX resume and map it into the builder's editable schema."""
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    file = request.files.get("resume_file")
+    if not file or not file.filename:
+        return jsonify({"error": "No resume file uploaded"}), 400
+
+    extension = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if extension not in {"pdf", "docx"}:
+        return jsonify({"error": "Only PDF and DOCX resumes are supported"}), 400
+
     try:
-        result = result.strip()
+        resume_bytes = file.read()
+        if extension == "pdf":
+            if not PDF_EXTRACT_OK:
+                return jsonify({"error": "PDF extraction is unavailable on this server"}), 500
+            resume_text = pdf_extract_text(BytesIO(resume_bytes))
+        else:
+            with zipfile.ZipFile(BytesIO(resume_bytes)) as document:
+                xml = document.read("word/document.xml")
+            root = ElementTree.fromstring(xml)
+            text_nodes = root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")
+            resume_text = "\n".join(node.text for node in text_nodes if node.text)
+        resume_text = resume_text[:12000].strip()
+    except Exception as error:
+        return jsonify({"error": f"Could not read the resume: {error}"}), 400
+
+    if not resume_text:
+        return jsonify({"error": "The uploaded resume contains no readable text"}), 400
+
+    prompt = f"""Convert this resume into the JSON schema below. Preserve the candidate's wording and do not invent missing details.
+Return ONLY valid JSON, with empty strings or arrays when information is absent.
+Schema:
+{{
+  "documentHeading":"Resume", "name":"", "headline":"", "email":"", "phone":"", "location":"", "currentAddress":"", "permanentAddress":"", "dob":"", "parentsName":"", "summary":"",
+  "github":"", "linkedin":"", "portfolio":"", "twitter":"",
+  "skills":[], "skillCategories":{{"Programming Languages":[],"AI":[],"Libraries & Tools":[],"Web & Database":[],"Soft Skills":[],"Other Skills":[]}},
+  "experience":[{{"title":"","company":"","start":"","end":"","desc":""}}],
+  "education":[{{"degree":"","college":"","schoolCollegeUniversity":"","from":"","to":"","percent":"","year":""}}],
+  "projects":[{{"name":"","tech":"","desc":""}}],
+  "extraCurricular":[{{"title":"","org":"","type":"Other","year":"","desc":""}}],
+  "languages":[], "certifications":[], "declaration":"", "signature":"", "declarationDate":""
+}}
+
+RESUME:
+{resume_text}"""
+
+    result = gemini(prompt)
+    if result.startswith("AI unavailable") or result.startswith("AI error"):
+      return jsonify({"resume": basic_resume_from_text(resume_text), "filename": file.filename,
+              "warning": "AI is unavailable, so basic resume fields were imported."})
+    try:
         if "```" in result:
-            result = result.split("```")[1].replace("json", "").strip()
-        parsed = json.loads(result)
-        # Save score to analytics
-        conn = get_db()
-        conn.execute("""
-            INSERT INTO resume_analytics (username, ats_score) VALUES (?,?)
-            ON CONFLICT(username) DO UPDATE SET ats_score=excluded.ats_score
-        """, (session["user"], parsed.get("score", 0)))
-        conn.commit()
-        conn.close()
-        return jsonify(parsed)
-    except Exception as e:
-        return jsonify({
-            "score": 60, "grade": "C+",
-            "summary": "Resume received. Please ensure it has clear sections.",
-            "strengths": ["Resume submitted successfully"],
-            "improvements": ["Add more detail to experience", "Include a summary section"],
-            "keyword_match": 50,
-            "sections_found": ["Resume"],
-            "sections_missing": []
-        })
+            result = result.split("```", 2)[1].replace("json", "", 1).strip()
+        imported = json.loads(result.strip())
+        return jsonify({"resume": imported, "filename": file.filename})
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return jsonify({"error": "AI could not structure this resume. Please check the file and try again."}), 422
 
 
 @app.route("/api/resume-builder/save-version", methods=["POST"])
@@ -1505,7 +2082,6 @@ CANDIDATE_DASHBOARD_HTML = """<!DOCTYPE html>
     <a class="nav-item active" href="/dashboard"><span class="icon">🏠</span> Dashboard</a>
     <a class="nav-item" href="/resume-builder"><span class="icon">📄</span> Resume Builder</a>
     <a class="nav-item" href="/jobs"><span class="icon">💼</span> Browse Jobs</a>
-    <a class="nav-item {% if request.path == '/job-finder' %}active{% endif %}" href="/job-finder"><span class="icon">🔍</span> Job Finder</a>
     <a class="nav-item" href="/analytics"><span class="icon">📊</span> Analytics</a>
   </div>
   <div class="sidebar-bottom">
@@ -3159,8 +3735,8 @@ input[type=text]:focus,textarea:focus{border-color:#6366f1;}
                 {% endfor %}
               </div>
               <div>
-                <div style="font-size:11px;color:#3a3b4a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600;">⚠️ Improvements</div>
-                {% for s in result.improvements %}
+                <div style="font-size:11px;color:#fbbf24;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600;">⚠️ Weaknesses / Improvements</div>
+                {% for s in result.weaknesses %}
                 <div style="font-size:12px;color:#9ca3c0;margin-bottom:5px;display:flex;gap:6px;"><span style="color:#fbbf24;">•</span>{{ s }}</div>
                 {% endfor %}
               </div>
@@ -3692,6 +4268,9 @@ JOB_BOARD_HTML = """<!DOCTYPE html>
       <button type="submit">🔍 Search</button>
     </form>
 
+    {% if recommendation_query %}
+    <div style="padding:12px 0;color:#9ca3c0;font-size:13px;">No exact live vacancy matched "{{ query }}". Showing current recommendations.</div>
+    {% endif %}
     {% if jobs %}
       {% for job in jobs %}
       <div class="job-card">
@@ -3717,8 +4296,12 @@ JOB_BOARD_HTML = """<!DOCTYPE html>
             {% endif %}
           </div>
           <div class="jc-actions">
+            {% if job.source_url %}
+            <a class="apply-btn" href="{{ job.source_url }}" target="_blank" rel="noopener noreferrer">View &amp; Apply</a>
+            {% else %}
             <button class="apply-btn" id="apply-{{ job.id }}" onclick="applyJob({{ job.id }}, this)">Apply Now</button>
             <button class="match-btn" onclick="checkMatch({{ job.id }})">🤖 Match %</button>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -4144,16 +4727,6 @@ textarea{resize:vertical;}
 <div class="editor">
   <div class="editor-title">✏️ Edit Resume</div>
 
-  <div class="e-card" style="border-color:rgba(99,102,241,0.2);">
-    <h3>⬆ Upload Existing Resume</h3>
-    <div id="uploadZone" style="border:2px dashed rgba(99,102,241,0.3);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;position:relative;" onclick="document.getElementById('resumeUploadInput').click()">
-      <div style="font-size:22px;">📄</div>
-      <div id="uploadLabel" style="font-size:12px;color:#6b7280;margin-top:4px;">Click to upload PDF or DOCX</div>
-      <input type="file" id="resumeUploadInput" accept=".pdf,.docx,.doc" style="display:none;" onchange="handleResumeUpload(this)">
-    </div>
-    <div id="uploadStatus" style="font-size:11px;margin-top:6px;color:#6b7280;"></div>
-  </div>
-
   <div class="e-card">
     <h3>Personal Info</h3>
     <label>Full Name</label><input type="text" id="name" placeholder="Rahul Sharma" oninput="renderResume()">
@@ -4298,65 +4871,8 @@ async function saveDraft(){
   try{const res=await fetch('/api/resume-builder/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const j=await res.json();showToast(j.success?'✅ Saved!':'❌ Save failed');}catch(e){showToast('❌ Save failed');}
 }
 
-async function handleResumeUpload(input){
-  const file = input.files[0];
-  if(!file) return;
-  document.getElementById('uploadLabel').textContent = file.name;
-  document.getElementById('uploadStatus').textContent = '⏳ Parsing resume with AI...';
-  const fd = new FormData();
-  fd.append('resume', file);
-  try {
-    const res = await fetch('/api/resume-builder/parse', {method:'POST', body:fd});
-    const d = await res.json();
-    if(!d.success){ document.getElementById('uploadStatus').textContent = '❌ ' + (d.error||'Parse failed'); return; }
-    const p = d.data;
-    // Personal info
-    if(p.name) document.getElementById('name').value = p.name;
-    if(p.title) document.getElementById('headline').value = p.title;
-    if(p.email) document.getElementById('email').value = p.email;
-    if(p.phone) document.getElementById('phone').value = p.phone;
-    if(p.location) document.getElementById('location').value = p.location;
-    if(p.summary) document.getElementById('summary').value = p.summary;
-    // Skills
-    if(p.skill && p.skill.length){
-      p.skill.forEach(s=>{ const name=typeof s==='string'?s:s.name; if(name && !resume.skills.includes(name)) resume.skills.push(name); });
-      renderSkillList();
-    }
-    // Experience
-    if(p.exp && p.exp.length){
-      resume.experiences = p.exp.map(e=>({title:e.title||'',company:e.company||'',start:e.start||'',end:e.end||'',desc:e.desc||''}));
-      renderExperienceList();
-    }
-    // Education — parser returns `institution`, form uses `college`
-    if(p.edu && p.edu.length){
-      resume.education = p.edu.map(e=>({degree:e.degree||'',college:e.institution||e.college||'',from:e.start||'',to:e.end||''}));
-      renderEducationList();
-    }
-    // Projects
-    if(p.proj && p.proj.length){
-      resume.projects = p.proj.map(pr=>({name:pr.title||pr.name||'',tech:pr.tech||'',desc:pr.desc||''}));
-      renderProjectList();
-    }
-    // Languages
-    if(p.lang && p.lang.length){
-      resume.languages = p.lang.map(l=>typeof l==='string'?l:l.name).filter(Boolean);
-      renderLanguageList();
-    }
-    // Certifications
-    if(p.cert && p.cert.length){
-      resume.certifications = p.cert.map(c=>typeof c==='string'?c:(c.title+(c.issuer?' — '+c.issuer:''))).filter(Boolean);
-      renderCertList();
-    }
-    renderResume();
-    document.getElementById('uploadStatus').textContent = '✅ Resume loaded! Review and edit below.';
-    showToast('✅ Resume parsed successfully!');
-  } catch(e){
-    document.getElementById('uploadStatus').textContent = '❌ Upload failed. Try again.';
-  }
-}
-
 async function downloadResume(){
-  const data={name:document.getElementById('name').value,headline:document.getElementById('headline').value,email:document.getElementById('email').value,phone:document.getElementById('phone').value,location:document.getElementById('location').value,summary:document.getElementById('summary').value,skills:(state.skill||[]).map(s=>typeof s==='string'?s:s.name),experiences:(state.exp||[]),education:(state.edu||[]).map(e=>({degree:e.degree||'',college:e.institution||e.college||'',from:e.start||'',to:e.end||'',desc:e.desc||''})),projects:(state.proj||[]).map(p=>({name:p.title||p.name||'',tech:p.tech||'',desc:p.desc||''})),languages:(state.lang||[]).map(l=>typeof l==='string'?l:l.name),certifications:(state.cert||[]).map(c=>typeof c==='string'?c:(c.title+(c.issuer?' — '+c.issuer:'')))};
+  const data={name:document.getElementById('name').value,headline:document.getElementById('headline').value,email:document.getElementById('email').value,phone:document.getElementById('phone').value,location:document.getElementById('location').value,summary:document.getElementById('summary').value,...resume};
   showToast('⏳ Generating PDF...');
   try{
     const response=await fetch('/api/resume-builder/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -4409,396 +4925,5 @@ async function getRoadmap(){
 
 init_tables()
 
-# ── HELPER: extract raw text from uploaded file ──
-def extract_text_from_file(filepath, filename):
-    ext = filename.rsplit('.', 1)[-1].lower()
-    print(f"=== EXTRACTING: {filename}, ext={ext}, path={filepath} ===")
-    if ext == 'pdf':
-        doc = fitz.open(filepath)
-        print(f"=== PDF PAGES: {len(doc)} ===")
-        text = "\n".join(page.get_text() for page in doc)
-        print(f"=== TEXT LENGTH: {len(text)} ===")
-        print(f"=== TEXT PREVIEW: {repr(text[:300])} ===")
-        if not text.strip():
-            text = ""
-            for page in doc:
-                blocks = page.get_text("blocks")
-                for block in blocks:
-                    if block[6] == 0:
-                        text += block[4] + "\n"
-        if not text.strip():
-            try:
-                from pdfminer.high_level import extract_text
-                text = extract_text(filepath)
-            except:
-                pass
-        return text.strip()
-    elif ext in ('docx', 'doc'):
-        d = docxlib.Document(filepath)
-        parts = []
-        for p in d.paragraphs:
-            if p.text.strip():
-                parts.append(p.text)
-        for table in d.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    if cell.text.strip():
-                        parts.append(cell.text)
-        return "\n".join(parts)
-    return ""
-# ── ROUTE: parse uploaded resume ──
-@app.route('/api/resume-builder/parse', methods=['POST'])
-def parse_resume():
-    if 'resume' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-
-    file = request.files['resume']
-    if not file.filename:
-        return jsonify({'error': 'Empty filename'}), 400
-
-    allowed = {'pdf', 'docx', 'doc'}
-    ext = file.filename.rsplit('.', 1)[-1].lower()
-    if ext not in allowed:
-        return jsonify({'error': 'Only PDF or DOCX allowed'}), 400
-
-    import tempfile
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.' + ext) as tmp:
-        file.save(tmp.name)
-        tmp_path = tmp.name
-
-    try:
-        raw_text = extract_text_from_file(tmp_path, file.filename)
-    finally:
-        os.unlink(tmp_path)
-
-    if not raw_text.strip():
-        return jsonify({'error': 'Could not extract text. Please use a DOCX file or a text-based PDF (not scanned/image).'}), 400
-
-    prompt = f"""
-You are a resume parser. Extract all information from the resume text below and return ONLY valid JSON — no markdown, no explanation, just the raw JSON object.
-
-Return this exact structure:
-{{
-  "name": "",
-  "title": "",
-  "email": "",
-  "phone": "",
-  "location": "",
-  "linkedin": "",
-  "github": "",
-  "website": "",
-  "summary": "",
-  "exp": [
-    {{"title": "", "company": "", "start": "", "end": "", "desc": ""}}
-  ],
-  "edu": [
-    {{"degree": "", "institution": "", "start": "", "end": "", "desc": ""}}
-  ],
-  "cert": [
-    {{"title": "", "issuer": "", "date": "", "id": ""}}
-  ],
-  "skill": [
-    {{"name": "", "level": ""}}
-  ],
-  "lang": [
-    {{"name": "", "level": ""}}
-  ],
-  "proj": [
-    {{"title": "", "tech": "", "desc": ""}}
-  ],
-  "extra": [
-    {{"title": "", "org": "", "type": "✨ Other", "year": "", "desc": ""}}
-  ]
-}}
-
-Resume text:
-{raw_text[:6000]}
-"""
-
-    try:
-        raw = gemini(prompt)
-        raw = re.sub(r'^```[a-z]*\n?', '', raw.strip())
-        raw = re.sub(r'\n?```$', '', raw)
-        parsed = json.loads(raw)
-        return jsonify({'success': True, 'data': parsed})
-    except Exception as e:
-        return jsonify({'error': f'AI parse failed: {str(e)}'}), 500
-
-# ── ADD THESE ROUTES TO app.py (just above if __name__ == '__main__':) ──
-
-@app.route('/job-finder')
-def job_finder():
-    return render_template('jobseeker/job-finder.html')
-
-
-@app.route('/api/job-finder/search', methods=['POST'])
-def job_finder_search():
-    if "user" not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    data = request.get_json()
-    query = data.get('query', 'developer')
-    location = data.get('location', '').strip() or 'India'
-    query_words = [w.lower() for w in query.split() if len(w) > 2]
-
-    def score(title, desc):
-        t, d = title.lower(), desc.lower()
-        matches = sum(1 for w in query_words if w in t or w in d)
-        return min(95, 50 + (matches * 18)) if matches > 0 else 35
-
-    jobs = []
-
-    # JSearch — aggregates Indeed, LinkedIn, Glassdoor, Naukri etc.
-    try:
-        jsearch_key = os.environ.get('JSEARCH_KEY', '')
-        resp = requests.get(
-            'https://jsearch.p.rapidapi.com/search',
-            headers={
-                'X-RapidAPI-Key': jsearch_key,
-                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
-            },
-            params={
-                'query': f"{query} in {location}",
-                'num_pages': '2',
-                'date_posted': 'month'
-            },
-            timeout=15
-        )
-        for j in resp.json().get('data', []):
-            title = j.get('job_title', '')
-            desc  = j.get('job_description', '')
-            salary = ''
-            if j.get('job_min_salary') and j.get('job_max_salary'):
-                salary = f"{j['job_currency'] or '₹'}{int(j['job_min_salary']):,} - {int(j['job_max_salary']):,}"
-            jobs.append({
-                'title': title,
-                'company': j.get('employer_name', ''),
-                'location': j.get('job_city', '') or j.get('job_country', '') or location,
-                'url': j.get('job_apply_link', '') or j.get('job_google_link', ''),
-                'description': desc[:300],
-                'created': (j.get('job_posted_at_datetime_utc') or '')[:10],
-                'salary': salary,
-                'fit_score': score(title, desc),
-                'source': j.get('job_publisher', '')
-            })
-    except Exception as e:
-        print(f"JSearch error: {e}")
-
-    # Fallback — Remotive for remote jobs
-    try:
-        resp2 = requests.get(
-            'https://remotive.com/api/remote-jobs',
-            params={'search': query, 'limit': 10},
-            timeout=15
-        )
-        for j in resp2.json().get('jobs', []):
-            title = j.get('title', '')
-            desc  = j.get('description', '')
-            jobs.append({
-                'title': title,
-                'company': j.get('company_name', ''),
-                'location': j.get('candidate_required_location', 'Worldwide Remote'),
-                'url': j.get('url', ''),
-                'description': desc[:300],
-                'created': j.get('publication_date', '')[:10],
-                'salary': j.get('salary', ''),
-                'fit_score': score(title, desc),
-                'source': 'Remotive'
-            })
-    except Exception as e:
-        print(f"Remotive error: {e}")
-
-    if not jobs:
-        return jsonify({'error': 'No jobs found. Try different keywords.'}), 404
-
-    jobs.sort(key=lambda x: x['fit_score'], reverse=True)
-    return jsonify({'success': True, 'jobs': jobs[:30], 'total': len(jobs)})
-
-@app.route('/api/job-finder/apply', methods=['POST'])
-def job_finder_apply():
-    if "user" not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    data = request.get_json()
-    title = data.get('title', 'Unknown Role')
-    company = data.get('company', 'Unknown Company')
-    location = data.get('location', '')
-    url = data.get('url', '')
-    conn = get_db()
-    # avoid duplicate entries
-    existing = conn.execute(
-        "SELECT id FROM applications WHERE username=? AND job_title=? AND company=?",
-        (session["user"], title, company)
-    ).fetchone()
-    if not existing:
-        conn.execute(
-    "INSERT INTO applications (username, job_title, company, status, applied_at) VALUES (?,?,?,?,?)",
-    (session["user"], title, company, 'Applied', datetime.now().isoformat())
-)
-        conn.commit()
-    conn.close()
-    return jsonify({'success': True})
-  
-@app.route('/api/job-finder/extract-skills', methods=['POST'])
-def extract_skills_from_resume():
-    if 'resume' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-
-    file = request.files['resume']
-    ext = file.filename.rsplit('.', 1)[-1].lower()
-    if ext not in {'pdf', 'docx', 'doc'}:
-        return jsonify({'error': 'Only PDF or DOCX allowed'}), 400
-
-    import tempfile
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.' + ext) as tmp:
-        file.save(tmp.name)
-        tmp_path = tmp.name
-
-    try:
-        raw_text = extract_text_from_file(tmp_path, file.filename)
-    finally:
-        os.unlink(tmp_path)
-
-    if not raw_text.strip():
-        return jsonify({'error': 'Could not extract text. Use DOCX for best results.'}), 400
-
-    prompt = f"""
-From this resume text, extract:
-1. The best job title/role this person should search for
-2. Top 5 skills
-
-Return ONLY JSON like this (no markdown, no explanation):
-{{"role": "Python Developer", "skills": ["Python", "Flask", "SQL", "Machine Learning", "Django"], "location": "India"}}
-
-Resume:
-{raw_text[:3000]}
-"""
-    try:
-        raw = gemini(prompt)
-        if not raw or not raw.strip():
-            return jsonify({'error': 'AI returned empty response. Check your GROQ key.'}), 500
-        if raw.startswith('AI error:'):
-            return jsonify({'error': raw}), 500
-        raw = re.sub(r'^```[a-z]*\n?', '', raw.strip())
-        raw = re.sub(r'\n?```$', '', raw)
-        # extract just the JSON object
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not match:
-            return jsonify({'error': f'No JSON found in AI response: {raw[:200]}'}), 500
-        parsed = json.loads(match.group())
-        return jsonify({'success': True, 'data': parsed})
-    except Exception as e:
-        return jsonify({'error': f'AI extraction failed: {str(e)}'}), 500
- 
-@app.route('/api/resume-builder/export-pdf', methods=['POST'])
-def resume_export_pdf():
-    if "user" not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import mm
-        from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
-
-        data = request.get_json()
-        
-        # Normalize frontend field names to PDF renderer expectations
-        if 'edu' in data and data['edu']:
-            data['edu'] = [{'degree': e.get('degree',''), 'college': e.get('institution', e.get('college','')), 'from': e.get('start',''), 'to': e.get('end',''), 'percent': e.get('percent','')} for e in data['edu']]
-        
-        name = data.get('name', 'Resume')
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4,
-            leftMargin=20*mm, rightMargin=20*mm,
-            topMargin=20*mm, bottomMargin=20*mm)
-
-        blue = colors.HexColor('#2563eb')
-        gray = colors.HexColor('#555555')
-
-        styles = getSampleStyleSheet()
-        s_name     = ParagraphStyle('n', fontSize=22, textColor=blue, alignment=TA_CENTER, spaceAfter=2)
-        s_title    = ParagraphStyle('t', fontSize=12, textColor=gray, alignment=TA_CENTER, spaceAfter=2)
-        s_contact  = ParagraphStyle('c', fontSize=10, textColor=gray, alignment=TA_CENTER, spaceAfter=8)
-        s_heading  = ParagraphStyle('h', fontSize=11, textColor=blue, fontName='Helvetica-Bold', spaceBefore=10, spaceAfter=4, borderPadding=(0,0,2,0))
-        s_body     = ParagraphStyle('b', fontSize=10, spaceAfter=2)
-        s_bold     = ParagraphStyle('bb', fontSize=10, fontName='Helvetica-Bold', spaceAfter=1)
-        s_sub      = ParagraphStyle('sub', fontSize=9, textColor=gray, spaceAfter=3)
-
-        story = []
-
-        story.append(Paragraph(data.get('name',''), s_name))
-        if data.get('title'): story.append(Paragraph(data['title'], s_title))
-        contact = ' | '.join(filter(None,[data.get('email',''), data.get('phone',''), data.get('location','')]))
-        if contact: story.append(Paragraph(contact, s_contact))
-        links = ' | '.join(filter(None,[data.get('linkedin',''), data.get('github','')]))
-        if links: story.append(Paragraph(links, s_contact))
-
-        if data.get('summary'):
-            story.append(Paragraph('PROFILE', s_heading))
-            story.append(Spacer(1, 1))
-            story.append(Paragraph(data['summary'], s_body))
-
-        if data.get('exp'):
-            story.append(Paragraph('EXPERIENCE', s_heading))
-            for e in data['exp']:
-                story.append(Paragraph(f"{e.get('title','')} — {e.get('company','')}", s_bold))
-                story.append(Paragraph(f"{e.get('start','')} — {e.get('end','')}", s_sub))
-                if e.get('desc'): story.append(Paragraph(e['desc'], s_body))
-
-        if data.get('edu'):
-            story.append(Paragraph('EDUCATION', s_heading))
-            for e in data['edu']:
-                story.append(Paragraph(e.get('degree',''), s_bold))
-                pct = (' | ' + e['percent']) if e.get('percent') else ''
-                story.append(Paragraph(f"{e.get('college','')} | {e.get('from','')} — {e.get('to','')}{pct}", s_sub))
-
-        if data.get('skill'):
-            story.append(Paragraph('SKILLS', s_heading))
-            story.append(Paragraph(', '.join([s.get('name','') for s in data['skill']]), s_body))
-
-        if data.get('proj'):
-            story.append(Paragraph('PROJECTS', s_heading))
-            for p in data['proj']:
-                story.append(Paragraph(p.get('title',''), s_bold))
-                if p.get('desc'): story.append(Paragraph(p['desc'], s_body))
-
-        if data.get('cert'):
-            story.append(Paragraph('CERTIFICATIONS', s_heading))
-            for c in data['cert']:
-                story.append(Paragraph(f"{c.get('title','')} — {c.get('issuer','')} {c.get('date','')}", s_body))
-
-        if data.get('lang'):
-            story.append(Paragraph('LANGUAGES', s_heading))
-            story.append(Paragraph(', '.join([l.get('name','') + (' (' + l.get('level','') + ')' if l.get('level') else '') for l in data['lang']]), s_body))
-
-        if data.get('extra'):
-            story.append(Paragraph('EXTRA CURRICULAR', s_heading))
-            for x in data['extra']:
-                story.append(Paragraph(f"{x.get('title','')} — {x.get('org','')}", s_bold))
-                if x.get('desc'): story.append(Paragraph(x['desc'], s_body))
-
-        doc.build(story)
-        buffer.seek(0)
-        return send_file(buffer, mimetype='application/pdf', as_attachment=True,
-                         download_name=f"{name.replace(' ','_')}_resume.pdf")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/chat', methods=['POST'])
-def landing_chat():
-    data = request.get_json()
-    msg = data.get('message', '')
-    prompt = f"""You are RecruitAI's helpful assistant on the landing page. 
-Answer questions about RecruitAI's features: AI resume screening, candidate ranking, 
-resume builder, job finder, analytics dashboard, and interview assistant.
-Keep responses short, friendly, and under 2 sentences.
-User message: {msg}"""
-    try:
-        reply = gemini(prompt)
-        return jsonify({'reply': reply})
-    except:
-        return jsonify({'reply': 'I am here to help! Please sign up to explore all RecruitAI features.'})
-      
-      
-if __name__ == '__main__':
-    app.run(debug=True, port=5001, use_reloader=False)
+if __name__ == "__main__":
+    app.run(debug=True)

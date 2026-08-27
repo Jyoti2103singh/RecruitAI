@@ -114,6 +114,7 @@
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .bg-animated-page { background: linear-gradient(-45deg, #0d0d15, #1b1b23, #13131b, #1f1f27); background-size: 400% 400%; animation: gradient-move 15s ease infinite; }
         #chat-widget:hover #chat-window { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        #chat-widget.open #chat-window { opacity: 1; transform: translateY(0); pointer-events: auto; }
         body { min-height: max(884px, 100dvh); }
     </style>
 </head>
@@ -123,11 +124,11 @@
 <header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-[0_8px_32px_rgba(192,193,255,0.15)]">
 <nav class="flex justify-between items-center px-gutter py-4 w-full max-w-full">
 <div class="flex items-center gap-base">
-<span class="material-symbols-outlined text-primary">🎯</span>
+<span class="material-symbols-outlined text-primary">clinical_notes</span>
 <span class="font-display-lg text-headline-md font-bold text-primary tracking-tight">RecruitAI</span>
 </div>
 <div class="hidden md:flex items-center gap-lg">
-<a class="text-primary font-bold transition-colors" href="/dashboard">Platform</a>
+<a class="text-primary font-bold transition-colors" href="/platform">Platform</a>
 <a class="text-on-surface-variant hover:text-primary transition-colors" href="/solutions">Solutions</a>
 <a class="text-on-surface-variant hover:text-primary transition-colors" href="/resources">Resources</a>
 </div>
@@ -153,7 +154,7 @@
 <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-tertiary">Beyond Keywords.</span>
 </h1>
 <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-xl">
-    RecruitAI decodes professional narratives, identifying top 1% talent with surgical precision. Transform your recruitment from screening to strategic selection.
+    RecruitAI decodes professional narratives, identifying top talent with precision. Transform your recruitment from screening to strategic selection.
 </p>
 <div class="flex flex-col md:flex-row items-center justify-center gap-md">
 <!-- FIXED -->
@@ -208,7 +209,7 @@
 <div class="lg:w-1/2 reveal">
 <h2 class="font-display-lg text-display-lg mb-md leading-tight">Human-Centric <br/> AI Analysis</h2>
 <p class="font-body-lg text-body-lg text-on-surface-variant mb-lg">
-    Lumina doesn't just read words; it understands career trajectories, skill mastery levels, and cultural fit potential through deep semantic analysis.
+    RecruitAI doesn't just read words; it understands career trajectories, skill mastery levels, and cultural fit potential through deep semantic analysis.
 </p>
 <ul class="space-y-base">
 <li class="flex items-center gap-md text-on-surface">
@@ -249,7 +250,7 @@
 <div class="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[80px]"></div>
 <h2 class="font-display-lg text-display-lg mb-md reveal">Ready to unlock human potential?</h2>
 <p class="font-body-lg text-body-lg text-on-surface-variant mb-xl max-w-xl mx-auto reveal">
-    Join over 500+ forward-thinking enterprises using RecruitAI to scale their teams smarter and faster.
+    Join forward-thinking enterprises using RecruitAI to scale their teams smarter and faster.
 </p>
 <div class="flex flex-wrap justify-center gap-md reveal">
 <!-- FIXED -->
@@ -269,12 +270,12 @@
 <div class="flex flex-col md:flex-row justify-between items-center px-gutter gap-md">
 <div class="flex flex-col gap-xs items-center md:items-start">
 <div class="font-display-lg text-headline-md text-primary">RecruitAI</div>
-<div class="font-body-sm text-body-sm text-secondary">© 2024 RecruitAI. Human-Centric Intelligence.</div>
+<div class="font-body-sm text-body-sm text-secondary">RecruitAI. Human-Centric Intelligence.</div>
 </div>
 <div class="flex gap-lg">
-<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy</a>
-<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Terms</a>
-<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">API Status</a>
+<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="/privacy">Privacy</a>
+<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="/terms">Terms</a>
+<a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="/api-status">API Status</a>
 </div>
 </div>
 </footer>
@@ -294,12 +295,12 @@
 </div>
 </div>
 </div>
-<button class="text-on-surface-variant hover:text-white"><span class="material-symbols-outlined text-lg">close</span></button>
+<button id="chat-close" class="text-on-surface-variant hover:text-white" type="button"><span class="material-symbols-outlined text-lg">close</span></button>
 </div>
-<div class="p-md space-y-md h-64 overflow-y-auto" id="chat-messages">
+<div id="chat-messages" class="p-md space-y-md h-64 overflow-y-auto">
 <div class="flex gap-sm">
 <div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">
-    Hello! I'm RecruitAI's AI recruiter. How can I help you find your next superstar today?
+    Hello! I'm RecruitAI's assistant. How can I help with your hiring workflow today?
 </div>
 </div>
 <div class="flex justify-end gap-sm">
@@ -310,41 +311,52 @@
 </div>
 <div class="p-md border-t border-white/10 flex gap-sm">
 <input id="chat-input" class="flex-1 bg-surface-container-lowest rounded-xl text-sm px-sm py-2 border-none outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="Type your message..." type="text"/>
-<button id="chat-send" class="bg-primary p-2 rounded-xl text-on-primary"><span class="material-symbols-outlined">send</span></button>
+<button id="chat-send" class="bg-primary p-2 rounded-xl text-on-primary" type="button"><span class="material-symbols-outlined">send</span></button>
 </div>
 </div>
-<button id="chat-btn" class="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg transition-all duration-300 active:scale-90">
-<span class="material-symbols-outlined text-3xl">chat</span>
+<button id="chat-toggle" class="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_0_20px_rgba(128,131,255,0.4)] hover:shadow-[0_0_40px_rgba(128,131,255,0.6)] transition-all duration-300 relative overflow-hidden group-hover:scale-110 active:scale-90" type="button">
+<div class="absolute inset-0 bg-gradient-to-tr from-primary via-primary-container to-secondary opacity-50 group-hover:opacity-100 transition-opacity"></div>
+<span class="material-symbols-outlined text-3xl relative z-10">chat</span>
 </button>
 </div>
 
 <script>
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
     const chatWindow = document.getElementById('chat-window');
-    const chatBtn = document.getElementById('chat-btn');
-    chatBtn.addEventListener('click', () => {
-        chatWindow.classList.toggle('opacity-0');
-        chatWindow.classList.toggle('translate-y-10');
-        chatWindow.classList.toggle('pointer-events-none');
-    });
-    document.querySelector('#chat-window button').addEventListener('click', (e) => {
-        e.stopPropagation();
-        chatWindow.classList.add('opacity-0','translate-y-10','pointer-events-none');
-    });
-    document.getElementById('chat-send').addEventListener('click', sendMessage);
-    document.getElementById('chat-input').addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
-    async function sendMessage(){
-        const input = document.getElementById('chat-input');
-        const msg = input.value.trim();
-        if(!msg) return;
-        const box = document.getElementById('chat-messages');
-        box.innerHTML += `<div class="flex justify-end gap-sm"><div class="bg-primary p-sm rounded-2xl rounded-tr-none text-xs text-on-primary max-w-[80%]">${msg}</div></div>`;
-        input.value = '';
-        box.scrollTop = box.scrollHeight;
-        const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: msg})});
-        const d = await res.json();
-        box.innerHTML += `<div class="flex gap-sm"><div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">${d.reply||'Sorry, I could not respond.'}</div></div>`;
-        box.scrollTop = box.scrollHeight;
+    const chatMessages = document.getElementById('chat-messages');
+    const chatClose = document.getElementById('chat-close');
+    const chatWidget = document.getElementById('chat-widget');
+    const chatToggle = document.getElementById('chat-toggle');
+    let chatRequestPending = false;
+    async function sendChatMessage() {
+        const message = chatInput.value.trim();
+        if (!message || chatRequestPending) return;
+        chatRequestPending = true;
+        chatSend.disabled = true;
+        chatInput.disabled = true;
+        chatInput.value = '';
+        chatMessages.insertAdjacentHTML('beforeend', `<div class="flex justify-end gap-sm"><div class="bg-primary p-sm rounded-2xl rounded-tr-none text-xs text-on-primary max-w-[80%]">${message.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</div></div>`);
+        try {
+            const response = await fetch('/api/ai/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message}) });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Chat request failed');
+            const reply = data.reply || data.error || 'Please try again.';
+            chatMessages.insertAdjacentHTML('beforeend', `<div class="flex gap-sm"><div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">${reply.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</div></div>`);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        } catch (error) {
+            chatMessages.insertAdjacentHTML('beforeend', '<div class="flex gap-sm"><div class="bg-surface-container-high p-sm rounded-2xl rounded-tl-none text-xs text-on-surface max-w-[80%] border border-white/5">Chat is temporarily unavailable.</div></div>');
+        } finally {
+            chatRequestPending = false;
+            chatSend.disabled = false;
+            chatInput.disabled = false;
+            chatInput.focus();
+        }
     }
+    chatSend.addEventListener('click', sendChatMessage);
+    chatInput.addEventListener('keydown', event => { if (event.key === 'Enter') sendChatMessage(); });
+    chatToggle.addEventListener('click', () => { chatWidget.classList.toggle('open'); });
+    chatClose.addEventListener('click', () => { chatWidget.classList.remove('open'); });
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) entry.target.classList.add('active');
