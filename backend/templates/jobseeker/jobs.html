@@ -236,10 +236,17 @@
     const q = document.getElementById('searchInput').value.toLowerCase();
     const type = document.getElementById('typeFilter').value;
     const filtered = allJobs.filter(function(j) {
-      const matchQ = !q || j.title.toLowerCase().includes(q) || (j.company||'').toLowerCase().includes(q) || (j.skills||'').toLowerCase().includes(q);
+      const skills = Array.isArray(j.skills_list) ? j.skills_list.join(' ') : (j.skills_required || '');
+      const matchQ = !q || j.title.toLowerCase().includes(q) || (j.company||'').toLowerCase().includes(q) || skills.toLowerCase().includes(q);
       const matchType = !type || j.job_type === type;
       return matchQ && matchType;
     });
+    if (q && !filtered.length && !type) {
+      document.getElementById('jobsSubtitle').textContent = 'No exact matches for "' + q + '" - showing the latest opportunities';
+      renderJobs(allJobs);
+      return;
+    }
+    document.getElementById('jobsSubtitle').textContent = filtered.length + ' matching opportunit' + (filtered.length === 1 ? 'y' : 'ies');
     renderJobs(filtered);
   }
 

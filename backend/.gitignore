@@ -1,19 +1,27 @@
+# Environment variables
+.env
+*.env
+
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+
+# Virtual environments
 venv/
-.env
+.venv/
+env/
 
-# Database
+# Databases
 *.db
-*.sqlite3
 
-# Uploads
-backend/static/uploads/
+# Uploaded files
+uploads/
 backend/uploads/
-# Flask session
-flask_session/
+backend/static/uploads/
+
+# IDE
+.vscode/
+.idea/
 
 # OS
 .DS_Store
